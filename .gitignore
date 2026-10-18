@@ -1,0 +1,9 @@
+build/
+.build/
+.gradle/
+local.properties
+*.iml
+.idea/
+bridge/soulver/
+android/app/src/main/jniLibs/
+android/app/src/main/assets/soulver/

@@ -1,0 +1,112 @@
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  SWIFT_VERSION: 6.3.3 # must match the compiler SoulverCore was built with
+  NDK_VERSION: 27.3.13750724 # r27d, same as SoulverCore
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+
+      - name: Cache Swift toolchain + Android Swift SDK
+        id: swift-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/swift
+            ~/swift-dl
+          key: swift-${{ env.SWIFT_VERSION }}-v1
+
+      - name: Install Swift toolchain and Swift SDK for Android
+        run: |
+          V=$SWIFT_VERSION
+          mkdir -p ~/swift ~/swift-dl
+          if [ ! -x ~/swift/usr/bin/swift ]; then
+            curl -fsSL https://download.swift.org/swift-$V-release/ubuntu2404/swift-$V-RELEASE/swift-$V-RELEASE-ubuntu24.04.tar.gz | tar xz -C ~/swift --strip-components=1
+            curl -fsSL -o ~/swift-dl/android.tar.gz https://download.swift.org/swift-$V-release/android-sdk/swift-$V-RELEASE/swift-$V-RELEASE_android.artifactbundle.tar.gz
+          fi
+          echo "$HOME/swift/usr/bin" >> $GITHUB_PATH
+          export PATH=$HOME/swift/usr/bin:$PATH
+          swift --version
+          swift sdk install ~/swift-dl/android.tar.gz
+          swift sdk list
+
+      - name: Install NDK and link it into the Swift SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;$NDK_VERSION" > /dev/null
+          export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+          SETUP=$(find ~/.swiftpm/swift-sdks ~/.config/swiftpm/swift-sdks -name 'setup-android-sdk.sh' 2>/dev/null | head -1)
+          echo "setup script: ${SETUP:-none}"
+          if [ -n "$SETUP" ]; then bash "$SETUP"; fi
+
+      - name: Build Swift bridge and collect native libs
+        run: bridge/build.sh
+
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: 8.11.1 }
+
+      - name: Build APKs
+        run: gradle -p android assembleRelease assembleReleaseAndroidTest --no-daemon
+
+      - name: APK sizes
+        run: ls -la android/app/build/outputs/apk/*/ && unzip -l android/app/build/outputs/apk/release/app-arm64-v8a-release.apk | grep '\.so$'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: only-search-apk
+          path: android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-apks
+          path: |
+            android/app/build/outputs/apk/release/app-x86_64-release.apk
+            android/app/build/outputs/apk/androidTest/release/*.apk
+
+  emulator:
+    needs: apk
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: test-apks, path: apks }
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+
+      - name: Test on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            mkdir -p out
+            adb install -r $(find apks -name 'app-x86_64-release.apk')
+            adb install -r $(find apks -name '*androidTest.apk')
+            adb logcat -c
+            adb shell am instrument -w app.onlysearch.test/androidx.test.runner.AndroidJUnitRunner | tee out/instrument.txt
+            adb logcat -d -s SoulverTest:I AndroidRuntime:E DEBUG:* linker:* | tee out/logcat.txt
+            adb shell am start -W -n app.onlysearch/.MainActivity && sleep 8 && adb exec-out screencap -p > out/1-home.png
+            adb shell input swipe 540 1700 540 500 300 && sleep 3 && adb exec-out screencap -p > out/2-drawer.png
+            adb shell am force-stop app.onlysearch && adb shell am start -W -n app.onlysearch/.MainActivity --es query ca && sleep 6 && adb exec-out screencap -p > out/3-search.png
+            adb shell am force-stop app.onlysearch && adb shell am start -W -n app.onlysearch/.MainActivity --es query "'65 kg in pounds'" && sleep 6 && adb exec-out screencap -p > out/4-calc.png
+            adb logcat -d -s AndroidRuntime:E | tee out/crash.txt
+            grep -q "OK (" out/instrument.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: emulator-results, path: out }

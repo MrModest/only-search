@@ -1,0 +1,381 @@
+<title>Only Search Mockups</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- PROTOTYPE, throwaway. Three directions x four screens (Home, Drawer, Search, Calc), switch via #a/#b/#c, bottom bar or arrow keys. Calc values are hand-computed mocks, not SoulverCore output. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Figtree:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<style>
+/* Layout: page chrome is a quiet spec sheet; four phone frames per direction wrap into a row, one column on phones. */
+:root {
+  --bg: #eef0ee; --fg: #1b1f1d; --muted: #5d6662; --line: #d3d8d5; --accent: #2f6f5e; --pill: #1b1f1d; --pill-fg: #f4f6f5;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #141716; --fg: #e6ebe8; --muted: #95a09b; --line: #2b312e; --accent: #7cc5af; --pill: #e6ebe8; --pill-fg: #141716; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #141716; --fg: #e6ebe8; --muted: #95a09b; --line: #2b312e; --accent: #7cc5af; --pill: #e6ebe8; --pill-fg: #141716; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 110px; }
+header { max-width: 1280px; margin: 0 auto 24px; display: grid; gap: 6px; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font: 700 clamp(26px, 4vw, 38px)/1.1 var(--display); margin: 0; text-wrap: balance; }
+.lede { color: var(--muted); max-width: 68ch; margin: 0; }
+.variant { max-width: 1280px; margin: 0 auto; }
+.vhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; border-top: 1px solid var(--line); padding-top: 14px; margin-bottom: 18px; }
+.vhead h2 { font: 700 22px/1.2 var(--display); margin: 0; }
+.vhead p { margin: 0; color: var(--muted); flex: 1 1 320px; min-width: 0; }
+.screens { display: flex; flex-wrap: wrap; gap: 28px 24px; justify-content: center; }
+figure { margin: 0; display: grid; gap: 10px; justify-items: center; }
+figcaption { font: 500 12px/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-align: center; max-width: 288px; }
+figcaption b { display: block; color: var(--fg); font-weight: 500; }
+.notes { max-width: 1280px; margin: 32px auto 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.notes div { border-top: 1px solid var(--line); padding-top: 10px; min-width: 0; }
+.notes h3 { font: 600 13px/1.3 var(--body); margin: 0 0 4px; }
+.notes p { margin: 0; color: var(--muted); font-size: 13px; }
+
+/* Switcher: deliberately not part of the design */
+.switch { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 9;
+  display: flex; align-items: center; gap: 4px; background: var(--pill); color: var(--pill-fg); border-radius: 999px; padding: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.25); font: 500 13px var(--mono); max-width: calc(100% - 32px); }
+.switch button { all: unset; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 16px; }
+.switch button:hover, .switch button:focus-visible { background: color-mix(in srgb, var(--pill-fg) 18%, transparent); }
+.switch span { padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Phone frame (shared), contents are per direction and single-theme by design */
+.phone { width: 288px; max-width: 100%; height: 612px; border-radius: 40px; padding: 8px; background: #0d0e0e; box-shadow: 0 1px 0 #2a2c2c inset, 0 18px 40px -18px rgba(0,0,0,.45); }
+.scr { position: relative; height: 100%; border-radius: 32px; overflow: hidden; display: flex; flex-direction: column; font-size: 13px; line-height: 1.3; }
+.sb { display: flex; justify-content: space-between; padding: 12px 22px 6px; font-size: 11px; font-weight: 600; flex: none; }
+.kb { margin-top: auto; flex: none; padding: 8px 4px 18px; display: grid; gap: 8px; }
+.kb .row { display: flex; justify-content: center; gap: 4px; }
+.kb .row i { font-style: normal; flex: 0 0 23px; height: 34px; border-radius: 6px; display: grid; place-items: center; font-size: 13px; }
+.kb .row i.w { flex: 0 0 120px; }
+.kb .row i.m { flex: 0 0 36px; font-size: 11px; }
+.hl { text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1.5px; }
+
+/* A — Glass Spotlight */
+.A .scr { font-family: "Figtree", system-ui, sans-serif; color: #fff; background: radial-gradient(120% 70% at 20% 0%, #5f86a8 0%, transparent 60%), radial-gradient(90% 60% at 100% 100%, #7a6a9a 0%, transparent 60%), #2b3546; }
+.A .glass { background: rgba(255,255,255,.16); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.18); }
+.A .ico { width: 50px; height: 50px; border-radius: 14px; display: grid; place-items: center; font-weight: 700; font-size: 18px; color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.18); }
+.A .ico.s { width: 34px; height: 34px; border-radius: 10px; font-size: 13px; }
+.A .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 6px; padding: 0 16px; }
+.A .app { display: grid; justify-items: center; gap: 5px; font-size: 10.5px; font-weight: 500; text-align: center; }
+.A .clock { padding: 26px 22px 0; }
+.A .clock .t { font-size: 64px; font-weight: 600; letter-spacing: -.03em; line-height: 1; }
+.A .clock .d { font-size: 14px; opacity: .85; margin-top: 4px; }
+.A .wx { margin: 16px 16px 22px; border-radius: 20px; padding: 12px 14px; display: flex; justify-content: space-between; font-size: 12px; }
+.A .pill { margin: 0 16px; border-radius: 16px; padding: 11px 14px; display: flex; gap: 8px; align-items: center; font-size: 14px; opacity: .95; }
+.A .dock { margin: 14px 12px 14px; border-radius: 28px; padding: 10px; display: flex; justify-content: space-around; }
+.A .field { margin: 6px 12px 10px; border-radius: 14px; padding: 10px 12px; display: flex; gap: 8px; align-items: center; font-size: 15px; }
+.A .field .c { width: 1.5px; height: 18px; background: #9fd0ff; }
+.A .field .x { margin-left: auto; opacity: .6; font-size: 12px; }
+.A .sec { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; opacity: .65; padding: 10px 18px 6px; }
+.A .card { margin: 0 12px; border-radius: 18px; padding: 10px 12px; }
+.A .rowi { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.A .rowi small { display: block; opacity: .65; font-size: 11px; }
+.A .chip { font-size: 11px; padding: 5px 9px; border-radius: 999px; background: rgba(255,255,255,.18); white-space: nowrap; }
+.A .kb { background: rgba(20,24,32,.55); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.A .kb i { background: rgba(255,255,255,.22); color: #fff; }
+.A .letter { font-size: 12px; font-weight: 700; opacity: .7; padding: 10px 20px 6px; }
+.A .scrub { position: absolute; right: 4px; top: 120px; display: grid; gap: 1px; font-size: 8.5px; font-weight: 700; opacity: .7; text-align: center; }
+.A .big { font-size: 40px; font-weight: 700; letter-spacing: -.02em; line-height: 1.05; }
+
+/* B — Plain Text */
+.B .scr { font-family: "Newsreader", Georgia, serif; background: #f3f1ec; color: #1f1d1a; }
+.B .sb { font-family: "IBM Plex Mono", monospace; font-weight: 500; color: #6b665d; }
+.B .mono { font-family: "IBM Plex Mono", monospace; }
+.B .time { padding: 36px 26px 0; font-size: 58px; line-height: 1; letter-spacing: -.02em; }
+.B .date { padding: 6px 26px 0; font: 400 11px "IBM Plex Mono", monospace; color: #6b665d; letter-spacing: .04em; text-transform: uppercase; }
+.B .favs { padding: 48px 26px 0; display: grid; gap: 14px; font-size: 26px; }
+.B .hint { margin-top: auto; padding: 0 26px 26px; font: 400 10.5px "IBM Plex Mono", monospace; color: #8a8478; display: flex; justify-content: space-between; }
+.B .list { padding: 6px 26px; display: grid; gap: 9px; font-size: 19px; }
+.B .lt { font: 500 10.5px "IBM Plex Mono", monospace; color: #a3542e; padding-top: 8px; }
+.B .idx { position: absolute; right: 8px; top: 70px; display: grid; gap: 1px; font: 500 8.5px "IBM Plex Mono", monospace; color: #8a8478; text-align: center; }
+.B .idx b { color: #a3542e; }
+.B .res { padding: 0 24px; display: grid; gap: 10px; font-size: 21px; }
+.B .res small { font: 400 10px "IBM Plex Mono", monospace; color: #8a8478; margin-left: 6px; }
+.B .inp { margin: 0 14px 6px; border-top: 1.5px solid #1f1d1a; padding: 10px 10px 4px; display: flex; align-items: baseline; gap: 8px; font-size: 22px; }
+.B .inp .c { width: 1.5px; height: 22px; background: #a3542e; align-self: center; }
+.B .inp .ans { margin-left: auto; font: 500 15px "IBM Plex Mono", monospace; color: #a3542e; white-space: nowrap; }
+.B .kb { background: #e3e0d8; }
+.B .kb i { background: #fbfaf7; color: #1f1d1a; font-family: system-ui, sans-serif; }
+.B .pad { padding: 0 18px; display: grid; gap: 0; }
+.B .pad div { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 8px 0; border-bottom: 1px dashed #d6d1c5; font-size: 14px; align-items: baseline; }
+.B .pad div span:last-child { font: 500 12px "IBM Plex Mono", monospace; color: #a3542e; text-align: right; white-space: nowrap; }
+.B .pad div.var span:first-child { color: #6b665d; }
+
+/* C — Command Bar */
+.C .scr { font-family: "IBM Plex Sans", system-ui, sans-serif; background: #111315; color: #e8eaed; }
+.C .wall { position: absolute; inset: 0; background: linear-gradient(160deg, #1d2b2a 0%, #111315 55%), #111315; }
+.C .wall::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, transparent 0 22px, rgba(255,255,255,.025) 22px 23px); }
+.C .z { position: relative; display: flex; flex-direction: column; height: 100%; }
+.C .mono { font-family: "IBM Plex Mono", monospace; }
+.C .ico { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; font-size: 11px; font-weight: 600; flex: none; color: #111315; }
+.C .bar { margin: 0 10px 8px; border-radius: 14px; background: #1c1f22; border: 1px solid #2c3135; padding: 11px 12px; display: flex; align-items: center; gap: 9px; font-size: 14px; }
+.C .bar .c { width: 1.5px; height: 17px; background: #f5b04a; }
+.C .bar kbd, .C kbd { font: 500 10px "IBM Plex Mono", monospace; border: 1px solid #3a4045; border-radius: 5px; padding: 1px 5px; color: #9aa3ab; background: #16191b; }
+.C .chips { display: flex; gap: 8px; padding: 0 10px 10px; }
+.C .chips span { display: flex; align-items: center; gap: 6px; background: rgba(28,31,34,.85); border: 1px solid #2c3135; border-radius: 10px; padding: 6px 8px 6px 6px; font-size: 11.5px; }
+.C .sheet { background: #17191c; border-top: 1px solid #2c3135; border-radius: 20px 20px 0 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.C .grab { width: 36px; height: 4px; border-radius: 2px; background: #3a4045; margin: 8px auto 4px; flex: none; }
+.C .sec { font: 500 10px "IBM Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: #7d868e; padding: 10px 14px 4px; display: flex; justify-content: space-between; }
+.C .r { display: flex; align-items: center; gap: 10px; padding: 7px 14px; font-size: 13px; }
+.C .r .t { margin-left: auto; font-size: 10.5px; color: #7d868e; }
+.C .r.on { background: #23272b; box-shadow: inset 2px 0 0 #f5b04a; }
+.C .foot { margin-top: auto; border-top: 1px solid #2c3135; padding: 8px 12px; display: flex; justify-content: space-between; font-size: 11px; color: #9aa3ab; flex: none; }
+.C .kb { background: #1c1f22; }
+.C .kb i { background: #2c3135; color: #e8eaed; }
+.C .calc { margin: 6px 10px; border-radius: 14px; border: 1px solid #3a3222; background: #1d1b17; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 14px 10px; gap: 6px; text-align: center; }
+.C .calc .v { font-size: 17px; font-weight: 600; }
+.C .calc .v.big { font-size: 22px; color: #f5b04a; }
+.C .calc small { display: block; font: 400 9.5px "IBM Plex Mono", monospace; color: #7d868e; text-transform: uppercase; letter-spacing: .06em; margin-top: 3px; }
+.C .tbl { padding: 0 14px; display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; font-size: 12.5px; }
+.C .tbl span:nth-child(even) { font-family: "IBM Plex Mono", monospace; text-align: right; color: #e8eaed; }
+.C .tbl span:nth-child(odd) { color: #9aa3ab; }
+.C .frq { display: grid; grid-template-columns: repeat(5, 1fr); padding: 4px 10px; }
+.C .frq div { display: grid; justify-items: center; gap: 4px; font-size: 9.5px; color: #c2c8ce; }
+.C .frq .ico { width: 38px; height: 38px; border-radius: 11px; font-size: 14px; }
+
+/* D — Merged: Android home (A) + bottom bar & list results (C), tight padding, near-square corners */
+.D .scr { font-family: "Figtree", system-ui, sans-serif; color: #fff; background: radial-gradient(120% 70% at 20% 0%, #5f86a8 0%, transparent 60%), radial-gradient(90% 60% at 100% 100%, #7a6a9a 0%, transparent 60%), #2b3546; }
+.D .sb { padding: 10px 14px 4px; }
+.D .w { background: rgba(18,22,30,.42); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.12); border-radius: 5px; padding: 7px 8px; }
+.D .w small { display: block; font-size: 10px; opacity: .7; }
+.D .ico { width: 44px; height: 44px; border-radius: 9px; display: grid; place-items: center; font-weight: 700; font-size: 16px; color: #fff; flex: none; }
+.D .ico.s { width: 28px; height: 28px; border-radius: 6px; font-size: 11.5px; }
+.D .ico.m { width: 40px; height: 40px; border-radius: 8px; font-size: 15px; }
+.D .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 2px; padding: 0 6px; }
+.D .grid.g5 { grid-template-columns: repeat(5, 1fr); gap: 8px 0; }
+.D .app { display: grid; justify-items: center; gap: 3px; font-size: 10px; font-weight: 500; text-align: center; }
+.D .wrow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 8px; }
+.D .bar { margin: 0 6px 6px; border-radius: 6px; background: #1c1f22; border: 1px solid #2c3135; padding: 9px 10px; display: flex; align-items: center; gap: 8px; font-size: 14px; flex: none; }
+.D .bar .c { width: 1.5px; height: 17px; background: #f5b04a; }
+.D kbd { font: 500 10px "IBM Plex Mono", monospace; border: 1px solid #3a4045; border-radius: 3px; padding: 1px 4px; color: #9aa3ab; background: #16191b; }
+.D .sheet { background: #17191c; flex: 1; display: flex; flex-direction: column; overflow: hidden; color: #e8eaed; }
+.D .scrim { background: rgba(14,17,22,.82); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.D .sec { font: 500 9.5px "IBM Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: #7d868e; padding: 7px 10px 3px; display: flex; justify-content: space-between; }
+.D .r { display: flex; align-items: center; gap: 8px; padding: 4px 10px; font-size: 13px; }
+.D .r .t { margin-left: auto; font-size: 10.5px; color: #7d868e; }
+.D .r.on { background: #23272b; box-shadow: inset 2px 0 0 #f5b04a; }
+.D .calc { margin: 4px 6px; border-radius: 4px; border: 1px solid #3a3222; background: #1d1b17; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 10px 6px; gap: 4px; text-align: center; }
+.D .calc .v { font-size: 16px; font-weight: 600; }
+.D .calc .v.big { font-size: 21px; color: #f5b04a; }
+.D .calc small { display: block; font: 400 9.5px "IBM Plex Mono", monospace; color: #7d868e; text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }
+.D .tbl { padding: 2px 10px; display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: 12.5px; }
+.D .tbl span:nth-child(even) { font-family: "IBM Plex Mono", monospace; text-align: right; }
+.D .tbl span:nth-child(odd) { color: #9aa3ab; }
+.D .foot { border-top: 1px solid #2c3135; padding: 5px 10px; display: flex; justify-content: space-between; font-size: 11px; color: #9aa3ab; flex: none; }
+.D .kb { background: #1c1f22; padding: 6px 3px 14px; gap: 6px; }
+.D .kb .row { gap: 3px; }
+.D .kb i { background: #2c3135; color: #e8eaed; border-radius: 3px; flex-basis: 24px; }
+.D .kb .row i.w { flex-basis: 120px; }
+.D .letter { font: 600 10px "IBM Plex Mono", monospace; color: #9aa3ab; padding: 6px 10px 3px; }
+.D .scrub { position: absolute; right: 2px; top: 70px; display: grid; gap: 1px; font: 600 8px "IBM Plex Mono", monospace; color: #9aa3ab; text-align: center; }
+.D .eq { font-family: "IBM Plex Mono", monospace; }
+@media (prefers-reduced-motion: no-preference) { .scr .c { animation: blink 1.1s steps(1) infinite; } }
+@keyframes blink { 50% { opacity: 0; } }
+</style>
+
+<header>
+  <span class="eyebrow">Prototype · throwaway</span>
+  <h1>Only Search: three directions, four screens</h1>
+  <p class="lede">Each direction shows Home, App drawer, Search results and Calculations. Flip directions with the bar at the bottom or the arrow keys. D is the merged pick; A–C stay for reference. Calculator answers are hand-worked mocks of what SoulverCore should return; currency and crypto figures use placeholder rates.</p>
+</header>
+
+<main id="root"></main>
+
+<section class="notes">
+  <div><h3>D · Merged (current pick)</h3><p>Android home with widgets from A, the bottom search bar and list results from C. Tight padding, 3–9px corners.</p></div>
+  <div><h3>A · Glass Spotlight</h3><p>Closest to iOS. Icon grid, search field at the top, calculator as the hero card. Familiar, but the field is far from the thumb.</p></div>
+  <div><h3>B · Plain Text</h3><p>No icons, all type. The answer appears inline in the input as you type, and Calculations becomes a Soulver-style scratchpad with variables.</p></div>
+  <div><h3>C · Command Bar</h3><p>Raycast-like. A search bar is always on the home screen, results are a keyboard-style list with a selection, and math shows as input → output with a conversion table.</p></div>
+</section>
+
+<nav class="switch" aria-label="Switch direction">
+  <button id="prev" aria-label="Previous direction">←</button>
+  <span id="label"></span>
+  <button id="next" aria-label="Next direction">→</button>
+</nav>
+
+<script>
+const APPS = [
+  ["Banking","#2f7d5b"],["Books","#c4762b"],["Browser","#3b73d9"],["Calculator","#5b5f66"],["Calendar","#d9493b"],["Camera","#4a4f57"],
+  ["Chat","#2fa860"],["Clock","#22262b"],["Contacts","#6b7c93"],["Files","#3f8fd0"],["Fitness","#e0573a"],["Gallery","#d88a1d"],
+  ["Mail","#2c7be5"],["Maps","#37a36b"],["Messages","#30b05a"],["Music","#e2405f"],["Notes","#d9a92b"],["Phone","#2fa84f"],
+  ["Podcasts","#8a4fd0"],["Recorder","#c23b4a"],["Scanner","#2d8c8c"],["Settings","#6b7078"],["Tasks","#4466cc"],["Translate","#3a7bd5"],
+  ["Wallet","#1f2a44"],["Weather","#3d9be0"]
+];
+const col = n => (APPS.find(a => a[0] === n) || [0, "#777"])[1];
+const SB = `<div class="sb"><span>9:41</span><span>▴ ◢ 82%</span></div>`;
+const KB = `<div class="kb"><div class="row">${[..."qwertyuiop"].map(k=>`<i>${k}</i>`).join("")}</div><div class="row">${[..."asdfghjkl"].map(k=>`<i>${k}</i>`).join("")}</div><div class="row"><i class="m">⇧</i>${[..."zxcvbnm"].map(k=>`<i>${k}</i>`).join("")}<i class="m">⌫</i></div><div class="row"><i class="m">?123</i><i class="m">,</i><i class="w">space</i><i class="m">.</i><i class="m">↵</i></div></div>`;
+const hl = (name, q) => { const i = name.toLowerCase().indexOf(q); return i < 0 ? name : name.slice(0,i) + `<span class="hl">${name.slice(i,i+q.length)}</span>` + name.slice(i+q.length); };
+const groups = () => { const g = {}; APPS.forEach(([n]) => (g[n[0]] ||= []).push(n)); return g; };
+const AZ = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"];
+
+/* ---------- A ---------- */
+const aIco = (n, s) => `<div class="ico${s?" s":""}" style="background:${col(n)}">${n[0]}</div>`;
+const aApp = n => `<div class="app">${aIco(n)}<span>${n}</span></div>`;
+const A = {
+  name: "Glass Spotlight",
+  blurb: "iOS-familiar: icon grid, search field on top, calculator answer as the hero card.",
+  home: `${SB}<div class="clock"><div class="t">9:41</div><div class="d">Sunday, October 18</div></div>
+    <div class="wx glass"><span>☀ 18° Light breeze</span><span>Next: Standup 10:30</span></div>
+    <div class="grid">${["Calendar","Maps","Notes","Weather","Music","Gallery","Wallet","Settings"].map(aApp).join("")}</div>
+    <div style="margin-top:auto"></div>
+    <div class="pill glass">⌕ <span style="opacity:.75">Search apps, math, dates</span></div>
+    <div class="dock glass">${["Phone","Messages","Browser","Camera"].map(n=>aIco(n)).join("")}</div>`,
+  drawer: `${SB}<div class="field glass" style="margin-top:2px">⌕ <span style="opacity:.6">Search 26 apps</span></div>
+    <div style="overflow:hidden;flex:1">${Object.entries(groups()).slice(0,6).map(([l,ns])=>`<div class="letter">${l}</div><div class="grid">${ns.map(aApp).join("")}</div>`).join("")}</div>
+    <div class="scrub">${AZ.map(l=>`<span>${l}</span>`).join("")}</div>`,
+  search: `${SB}<div class="field glass">⌕ ca<span class="c"></span><span class="x">✕</span></div>
+    <div class="sec">Top hit</div>
+    <div class="card glass"><div class="rowi">${aIco("Calendar")}<div style="flex:1"><b style="font-size:15px">Calendar</b><small>Opened 14 times this week</small></div></div>
+      <div style="display:flex;gap:6px;padding-top:4px"><span class="chip">＋ New event</span><span class="chip">Today</span><span class="chip">Week</span></div></div>
+    <div class="sec">Apps</div>
+    <div class="grid">${["Camera","Calculator","Scanner","Recorder"].map(n=>`<div class="app">${aIco(n)}<span>${hl(n,"ca")}</span></div>`).join("")}</div>
+    <div class="sec">Shortcuts</div>
+    <div class="card glass"><div class="rowi">${aIco("Camera",1)}<div>Selfie<small>Camera</small></div></div><div class="rowi">${aIco("Maps",1)}<div>Navigate to Café Bloom<small>Maps · recent</small></div></div></div>
+    ${KB}`,
+  calc: `${SB}<div class="field glass">⌕ 65 kg in pounds<span class="c"></span><span class="x">✕</span></div>
+    <div class="sec">Calculator</div>
+    <div class="card glass" style="padding:14px"><div style="opacity:.7;font-size:12px">65 kg =</div><div class="big">143.3 lb</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><span class="chip">10 st 3.3 lb</span><span class="chip">2,292.8 oz</span><span class="chip">⧉ Copy</span></div></div>
+    <div class="sec">Also works</div>
+    <div class="card glass" style="font-size:12px">${[
+      ["9:35am in New York to Japan","10:35 pm JST"],["$10 for lunch + 15% tip","$11.50"],["Jan 30 2020 + 3 months 2 weeks 5 days","Tue, May 19 2020"],
+      ["40 is what % of 90","44.44%"],["$25/hour × 14 hours of work","$350"],["100 USD in EUR","€86.10"]
+    ].map(([e,r])=>`<div class="rowi" style="justify-content:space-between;gap:8px"><span style="opacity:.75">${e}</span><b style="white-space:nowrap">${r}</b></div>`).join("")}</div>
+    <div style="margin-top:auto;padding:10px 18px 18px;font-size:10.5px;opacity:.6">Rates updated today 08:00 · tap a result to copy</div>`
+};
+
+/* ---------- B ---------- */
+const B = {
+  name: "Plain Text",
+  blurb: "No icons, only type. The answer appears inside the input; Calculations is a scratchpad.",
+  home: `${SB}<div class="time">9:41</div><div class="date">Sun 18 Oct · 18° clear · standup 10:30</div>
+    <div class="favs">${["Messages","Calendar","Maps","Camera","Music","Notes"].map(n=>`<span>${n}</span>`).join("")}</div>
+    <div class="hint"><span>↑ all apps</span><span>type anywhere to search</span></div>`,
+  drawer: `${SB}<div style="overflow:hidden;flex:1;padding-right:18px">${Object.entries(groups()).slice(0,6).map(([l,ns])=>`<div class="list"><div class="lt">${l}</div>${ns.map(n=>`<span>${n}</span>`).join("")}</div>`).join("")}</div>
+    <div class="idx">${AZ.map(l=>"BCM".includes(l)?`<b>${l}</b>`:`<span>${l}</span>`).join("")}</div>`,
+  search: `${SB}<div style="flex:1"></div>
+    <div class="res">${[["Calendar","↵"],["Camera",""],["Calculator",""],["Scanner",""],["Recorder",""]].map(([n,k],i)=>`<span style="${i?"":"font-weight:500"}">${hl(n,"ca")}${k?`<small>${k} open</small>`:""}</span>`).join("")}
+      <span style="font-size:15px;color:#6b665d">Calendar › New event</span></div>
+    <div style="height:14px"></div>
+    <div class="inp">ca<span class="c"></span></div>${KB}`,
+  calc: `${SB}<div class="date" style="padding:6px 18px 8px">Scratchpad · lines stay until you clear</div>
+    <div class="pad">${[
+      ["rent = $1,850","$1,850", "var"],["rent / 2 + 15%","$1,063.75"],["$25k over 10 years at 7.5%","$51,525.79"],
+      ["3:45pm + 4 hr 10 min","7:55 pm"],["0.25 BTC in USD","$16,840"],["$150 is 25% on what","$120"]
+    ].map(([e,r,c])=>`<div class="${c||""}"><span>${e}</span><span>${r}</span></div>`).join("")}</div>
+    <div style="flex:1"></div>
+    <div class="inp" style="font-size:19px">65 kg in pounds<span class="c"></span><span class="ans">143.3 lb</span></div>${KB}`
+};
+
+/* ---------- C ---------- */
+const cIco = n => `<div class="ico" style="background:${col(n)};color:#fff">${n[0]}</div>`;
+const C = {
+  name: "Command Bar",
+  blurb: "Raycast-like. Bar always on home, results as a selectable list, math as input → output.",
+  home: `<div class="wall"></div><div class="z">${SB}
+    <div style="padding:30px 18px 0"><div style="font:600 13px 'IBM Plex Mono',monospace;color:#7d868e">SUN 18 OCT</div><div style="font-size:44px;font-weight:500;letter-spacing:-.02em">9:41</div></div>
+    <div style="flex:1"></div>
+    <div class="sec" style="padding:0 14px 6px"><span>Recent</span></div>
+    <div class="chips">${["Messages","Maps","Music"].map(n=>`<span>${cIco(n)}${n}</span>`).join("")}</div>
+    <div class="bar">⌕ <span style="color:#7d868e">Search or calculate…</span><kbd style="margin-left:auto">↑ apps</kbd></div>
+    <div style="height:14px"></div></div>`,
+  drawer: `${SB}<div class="sheet"><div class="grab"></div>
+    <div class="sec"><span>Frequent</span></div>
+    <div class="frq">${["Messages","Calendar","Maps","Camera","Music"].map(n=>`<div>${cIco(n).replace('class="ico"','class="ico"')}${n}</div>`).join("")}</div>
+    <div class="sec"><span>All apps</span><span>26</span></div>
+    <div style="overflow:hidden;flex:1">${APPS.slice(0,12).map(([n])=>`<div class="r">${cIco(n)}${n}<span class="t">${{Banking:"Finance",Books:"Reading",Browser:"Web",Calculator:"Tools",Calendar:"Productivity",Camera:"Media",Chat:"Social",Clock:"Tools",Contacts:"Social",Files:"Tools",Fitness:"Health",Gallery:"Media"}[n]}</span></div>`).join("")}</div>
+    <div class="bar" style="margin-top:8px">⌕ <span style="color:#7d868e">Filter apps</span></div><div style="height:10px"></div></div>`,
+  search: `${SB}<div class="sheet"><div class="grab"></div>
+    <div class="sec"><span>Apps</span><span>4</span></div>
+    ${["Calendar","Camera","Calculator","Scanner"].map((n,i)=>`<div class="r${i?"":" on"}">${cIco(n)}${hl(n,"ca")}<span class="t">${i?"App":"<kbd>↵</kbd> Open"}</span></div>`).join("")}
+    <div class="sec"><span>Shortcuts</span></div>
+    <div class="r">${cIco("Calendar")}New event<span class="t">Calendar</span></div>
+    <div class="r">${cIco("Camera")}Selfie<span class="t">Camera</span></div>
+    <div style="flex:1"></div>
+    <div class="bar">⌕ ca<span class="c"></span><kbd style="margin-left:auto">⋯ actions</kbd></div></div>${KB}`,
+  calc: `${SB}<div class="sheet"><div class="grab"></div>
+    <div class="sec"><span>Calculator</span><span>0.3 ms</span></div>
+    <div class="calc"><div><div class="v">65 kg</div><small>Kilograms</small></div><div style="color:#7d868e">→</div><div><div class="v big">143.3 lb</div><small>Pounds</small></div></div>
+    <div class="tbl" style="padding-top:6px">${[["Stones","10 st 3.3 lb"],["Ounces","2,292.8 oz"],["Grams","65,000 g"]].map(([a,b])=>`<span>${a}</span><span>${b}</span>`).join("")}</div>
+    <div class="sec" style="padding-top:14px"><span>History</span></div>
+    ${[["9:35am in New York to Japan","10:35 pm"],["$10 for lunch + 15% tip","$11.50"],["0.25 BTC in EUR","€14,500"]].map(([e,r])=>`<div class="r" style="font-size:12px"><span style="color:#9aa3ab">${e}</span><span class="t mono" style="color:#e8eaed;font-size:12px">${r}</span></div>`).join("")}
+    <div style="flex:1"></div>
+    <div class="foot"><span><kbd>↵</kbd> Copy answer</span><span><kbd>⇧↵</kbd> Copy expression</span></div>
+    <div class="bar">⌕ 65 kg in pounds<span class="c"></span></div></div>${KB}`
+};
+
+/* ---------- D ---------- */
+const dIco = (n, z="") => `<div class="ico ${z}" style="background:${col(n)}">${n[0]}</div>`;
+const dApp = (n, z) => `<div class="app">${dIco(n, z)}<span>${n}</span></div>`;
+const dRow = (n, label, cls="", right="") => `<div class="r ${cls}">${dIco(n,"s")}${label}<span class="t">${right}</span></div>`;
+const D = {
+  name: "Merged",
+  blurb: "Your pick: Android home with widgets from A, the always-at-the-bottom search bar and list results from C. Tight padding, near-square corners.",
+  home: `${SB}
+    <div style="padding:6px 12px 10px;display:flex;align-items:flex-end;justify-content:space-between">
+      <div style="font-size:52px;font-weight:600;letter-spacing:-.03em;line-height:1">9:41</div>
+      <div style="text-align:right;font-size:12px;line-height:1.35"><b>Sun, Oct 18</b><br><span style="opacity:.8">☀ 18° · Light breeze</span></div></div>
+    <div class="wrow">
+      <div class="w"><small>TODAY</small><b>Standup</b><small>10:30 – 10:45 · Room 3</small><div style="height:4px"></div><b>Dentist</b><small>16:00 · Rua Augusta 12</small></div>
+      <div class="w" style="display:grid;align-content:space-between"><small>NOW PLAYING</small><b>Teardrop</b><small>Massive Attack</small><div style="display:flex;justify-content:space-between;font-size:14px;padding-top:4px"><span>⏮</span><span>⏸</span><span>⏭</span></div></div>
+    </div>
+    <div style="height:8px"></div>
+    <div class="wrow" style="grid-template-columns:1fr"><div class="w" style="display:flex;justify-content:space-between;font-size:11px"><span>☀ 18°</span><span style="opacity:.75">12h ☀ 19°</span><span style="opacity:.75">15h ⛅ 17°</span><span style="opacity:.75">18h ☁ 14°</span><span style="opacity:.75">21h ☂ 12°</span></div></div>
+    <div style="flex:1"></div>
+    <div class="grid">${["Calendar","Maps","Notes","Weather","Music","Gallery","Wallet","Settings"].map(n=>dApp(n)).join("")}</div>
+    <div style="height:10px"></div>
+    <div class="bar">⌕ <span style="color:#7d868e">Search apps, math, dates</span><kbd style="margin-left:auto">↑ apps</kbd></div>
+    <div style="height:4px"></div>
+    <div class="grid">${["Phone","Messages","Browser","Camera"].map(n=>`<div class="app">${dIco(n)}</div>`).join("")}</div>
+    <div style="height:12px"></div>`,
+  drawer: `${SB}<div class="scrim">
+    <div class="sec"><span>Frequent</span></div>
+    <div class="grid g5" style="padding-right:12px">${["Messages","Calendar","Maps","Camera","Music"].map(n=>dApp(n,"m")).join("")}</div>
+    <div style="overflow:hidden;flex:1;padding-right:12px">${Object.entries(groups()).slice(0,5).map(([l,ns])=>`<div class="letter">${l}</div><div class="grid g5">${ns.map(n=>dApp(n,"m")).join("")}</div>`).join("")}</div>
+    <div class="scrub">${AZ.map(l=>`<span>${l}</span>`).join("")}</div>
+    <div style="height:6px"></div>
+    <div class="bar">⌕ <span style="color:#7d868e">Filter 26 apps</span></div><div style="height:6px"></div></div>`,
+  search: `${SB}<div class="sheet">
+    <div class="sec"><span>Apps</span><span>4</span></div>
+    ${["Calendar","Camera","Calculator","Scanner"].map((n,i)=>dRow(n, hl(n,"ca"), i?"":"on", i?"App":"<kbd>↵</kbd> Open")).join("")}
+    <div class="sec"><span>Shortcuts</span></div>
+    ${dRow("Calendar","New event","","Calendar")}${dRow("Camera","Selfie","","Camera")}${dRow("Maps","Navigate to Café Bloom","","Maps")}
+    <div style="flex:1"></div>
+    <div class="bar">⌕ ca<span class="c"></span><kbd style="margin-left:auto">⋯ actions</kbd></div></div>${KB}`,
+  calc: `${SB}<div class="sheet">
+    <div class="sec"><span>Calculator</span><span>0.3 ms</span></div>
+    <div class="calc"><div><div class="v">65 kg</div><small>Kilograms</small></div><div style="color:#7d868e">→</div><div><div class="v big">143.3 lb</div><small>Pounds</small></div></div>
+    <div class="tbl">${[["Stones","10 st 3.3 lb"],["Ounces","2,292.8 oz"],["Grams","65,000 g"]].map(([a,b])=>`<span>${a}</span><span>${b}</span>`).join("")}</div>
+    <div class="sec" style="padding-top:10px"><span>History</span></div>
+    ${[["9:35am in New York to Japan","10:35 pm"],["$10 for lunch + 15% tip","$11.50"],["Jan 30 2020 + 3 months 2 weeks 5 days","May 19 2020"],["0.25 BTC in EUR","€14,500"]].map(([e,r])=>`<div class="r" style="font-size:12px"><span style="color:#9aa3ab;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e}</span><span class="t eq" style="color:#e8eaed;font-size:12px;white-space:nowrap">${r}</span></div>`).join("")}
+    <div style="flex:1"></div>
+    <div class="foot"><span><kbd>↵</kbd> Copy answer</span><span><kbd>⇧↵</kbd> Copy expression</span></div>
+    <div class="bar">⌕ 65 kg in pounds<span class="c"></span></div></div>${KB}`
+};
+
+const V = { d: D, a: A, b: B, c: C };
+const KEYS = Object.keys(V);
+const SCREENS = [["home","Home","Swipe up for apps"],["drawer","App drawer","A–Z with index"],["search","Search results","Query: “ca”"],["calc","Calculations","Query: “65 kg in pounds”"]];
+const root = document.getElementById("root");
+root.innerHTML = KEYS.map(k => `<section class="variant ${k.toUpperCase()}" id="v-${k}" hidden>
+  <div class="vhead"><h2>${k.toUpperCase()} · ${V[k].name}</h2><p>${V[k].blurb}</p></div>
+  <div class="screens">${SCREENS.map(([s,t,c]) => `<figure><div class="phone"><div class="scr">${V[k][s]}</div></div><figcaption><b>${t}</b>${c}</figcaption></figure>`).join("")}</div>
+</section>`).join("");
+
+function show(k) {
+  if (!V[k]) k = "d";
+  KEYS.forEach(x => document.getElementById("v-" + x).hidden = x !== k);
+  document.getElementById("label").textContent = `${k.toUpperCase()} (${V[k].name})`;
+  try { history.replaceState(null, "", "#" + k); } catch (e) {}
+  show.cur = k;
+}
+const step = d => show(KEYS[(KEYS.indexOf(show.cur) + d + KEYS.length) % KEYS.length]);
+document.getElementById("prev").onclick = () => step(-1);
+document.getElementById("next").onclick = () => step(1);
+addEventListener("keydown", e => {
+  if (e.target.closest("input,textarea,[contenteditable]")) return;
+  if (e.key === "ArrowLeft") step(-1);
+  if (e.key === "ArrowRight") step(1);
+});
+show(location.hash.slice(1));
+</script>
