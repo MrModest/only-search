@@ -25,10 +25,5 @@ The prototype is throwaway HTML. Rebuild the screens properly in Compose; don't 
 
 Calc values in the mock are hand-worked, not SoulverCore output. Currency and crypto use placeholder rates.
 
-## Next step: APK
-Plan, not started yet:
-1. Install the Android SDK/NDK, Gradle, a JDK, an emulator image (x86_64), and the Swift 6.3+ toolchain with the Swift SDK for Android.
-2. Download the SoulverCore-Multiplatform Android release (`.so` and `SoulverCore_SoulverCore.resources`). Work out its runtime dependencies (`readelf -d`).
-3. Write a small Swift shim that exposes `evaluate(String) -> String` (plus init with the resources path) over JNI, and package it with the Swift runtime `.so` files in `jniLibs/`. Ship the resources bundle as assets, copied to `filesDir` on first run.
-4. Kotlin + Compose launcher (HOME intent filter): app list via `LauncherApps`, fuzzy search, app shortcuts, calc evaluated off the main thread on each keystroke.
-5. Measure cold init, warm eval latency, memory and APK size on the emulator. Check 16 KB page alignment.
+## Implementation
+Built; see [ANDROID.md](ANDROID.md) for the build pipeline, verified facts and known gaps.

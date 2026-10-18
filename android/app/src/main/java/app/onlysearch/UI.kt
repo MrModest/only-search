@@ -11,7 +11,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -101,18 +103,22 @@ fun Launcher(apps: Apps, widgets: Widgets, resetTick: Int, initialQuery: String?
 
 // ---------- Home ----------
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HomeScreen(apps: Apps, widgets: Widgets, onSearch: () -> Unit, onDrawer: () -> Unit, onPickWidget: () -> Unit) {
     val context = LocalContext.current
     var menu by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf(false) }
+    var dragged by remember { mutableFloatStateOf(0f) }
     Column(
-        Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 6.dp)
-            .pointerInput(Unit) { detectTapGestures(onLongPress = { menu = true }) }
-            .pointerInput(Unit) {
-                var dy = 0f
-                detectVerticalDragGestures(onDragStart = { dy = 0f }, onDragEnd = { if (dy < -120) onDrawer() }) { _, d -> dy += d }
-            }
+        Modifier.fillMaxSize()
+            .draggable(
+                rememberDraggableState { dragged += it }, Orientation.Vertical,
+                onDragStarted = { dragged = 0f },
+                onDragStopped = { velocity -> if (dragged < -100 || velocity < -800) onDrawer() },
+            )
+            .combinedClickable(interactionSource = null, indication = null, onLongClick = { menu = true }) {}
+            .systemBarsPadding().padding(horizontal = 6.dp)
     ) {
         Clock()
         widgets.ids.forEach { id -> WidgetView(widgets, id); Spacer(Modifier.height(6.dp)) }
