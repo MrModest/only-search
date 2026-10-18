@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Builds libSoulverBridge.so per ABI and copies it, SoulverCore and every Swift runtime .so it needs
 # into the Android app. Needs: swift 6.3.3 + its Android Swift SDK installed, ANDROID_NDK_HOME.
-set -euo pipefail
+set -euxo pipefail
 SOULVER_VERSION=3.5.1
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 APP=$ROOT/android/app/src/main
 SDK_NAME=$(swift sdk list | grep -i android | head -1)
-SDK_DIR=$(find ~/.swiftpm/swift-sdks ~/.config/swiftpm/swift-sdks -maxdepth 1 -name "$SDK_NAME*" 2>/dev/null | head -1)
+SDK_DIR=$(find ~/.swiftpm/swift-sdks ~/.config/swiftpm/swift-sdks -maxdepth 1 -name "$SDK_NAME*" 2>/dev/null | head -1 || true)
 mkdir -p "$ROOT/build/dl"
 
 for pair in aarch64:arm64-v8a x86_64:x86_64; do
