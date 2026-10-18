@@ -88,10 +88,10 @@ jobs:
       - name: Test on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: 37
           target: google_apis
           arch: x86_64
-          profile: pixel_6
+          profile: pixel_9_pro
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
