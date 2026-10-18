@@ -96,7 +96,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
             mkdir -p out
-            adb shell wm size 1280x2856 && adb shell wm density 495
+            sleep 30; adb shell wm size 1280x2856; adb shell wm density 495; sleep 5; adb shell wm size || true
             adb install -r $(find apks -name 'app-x86_64-release.apk')
             adb install -r $(find apks -name '*androidTest.apk')
             adb logcat -c
