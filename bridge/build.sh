@@ -19,7 +19,7 @@ for pair in aarch64:arm64-v8a x86_64:x86_64; do
     cp "$ROOT/bridge/soulver/SoulverCore.swiftinterface" "$ROOT/bridge/soulver/SoulverCore.swiftmodule/$t.swiftinterface"
   done
 
-  (cd "$ROOT/bridge" && swift build -c release --swift-sdk "$SDK_NAME" --triple "$TRIPLE")
+  (cd "$ROOT/bridge" && swift build -c release --swift-sdk "$TRIPLE")
 
   OUT=$APP/jniLibs/$ABI; rm -rf "$OUT"; mkdir -p "$OUT"
   cp "$ROOT/bridge/.build/$TRIPLE/release/libSoulverBridge.so" "$ROOT/bridge/soulver/libSoulverCoreDynamic.so" "$OUT/"
