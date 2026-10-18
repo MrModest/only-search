@@ -92,11 +92,14 @@ jobs:
           target: google_apis_ps16k
           arch: x86_64
           profile: pixel_6
+          ram-size: 4096M
+          cores: 4
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
             mkdir -p out
-            sleep 30; adb shell wm size 1280x2856; adb shell wm density 495; sleep 5; adb shell wm size || true
+            for i in $(seq 60); do adb shell pm path android >/dev/null 2>&1 && adb shell cmd window size >/dev/null 2>&1 && break; sleep 5; done; adb shell getprop ro.build.version.release
+            adb shell wm size 1280x2856; adb shell wm density 495; sleep 5; adb shell wm size || true
             adb install -r $(find apks -name 'app-x86_64-release.apk')
             adb install -r $(find apks -name '*androidTest.apk')
             adb logcat -c
