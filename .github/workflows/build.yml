@@ -91,18 +91,19 @@ jobs:
           api-level: "37.2"
           target: google_apis_ps16k
           arch: x86_64
-          profile: pixel_9_pro
+          profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
             mkdir -p out
+            adb shell wm size 1280x2856 && adb shell wm density 495
             adb install -r $(find apks -name 'app-x86_64-release.apk')
             adb install -r $(find apks -name '*androidTest.apk')
             adb logcat -c
             adb shell am instrument -w app.onlysearch.test/androidx.test.runner.AndroidJUnitRunner | tee out/instrument.txt
             adb logcat -d -s SoulverTest:I AndroidRuntime:E DEBUG:* linker:* | tee out/logcat.txt
             adb shell am start -W -n app.onlysearch/.MainActivity && sleep 8 && adb exec-out screencap -p > out/1-home.png
-            adb shell input swipe 540 1500 540 500 400 && sleep 3 && adb exec-out screencap -p > out/2-drawer.png
+            adb shell input swipe 640 1800 640 600 400 && sleep 3 && adb exec-out screencap -p > out/2-drawer.png
             adb shell am force-stop app.onlysearch && adb shell am start -W -n app.onlysearch/.MainActivity --es query ca && sleep 6 && adb exec-out screencap -p > out/3-search.png
             adb shell am force-stop app.onlysearch && adb shell am start -W -n app.onlysearch/.MainActivity --es query "'65 kg in pounds'" && sleep 6 && adb exec-out screencap -p > out/4-calc.png
             adb logcat -d -s AndroidRuntime:E | tee out/crash.txt
