@@ -101,7 +101,7 @@ jobs:
             adb shell am instrument -w app.onlysearch.test/androidx.test.runner.AndroidJUnitRunner | tee out/instrument.txt
             adb logcat -d -s SoulverTest:I AndroidRuntime:E DEBUG:* linker:* | tee out/logcat.txt
             adb shell am start -W -n app.onlysearch/.MainActivity && sleep 8 && adb exec-out screencap -p > out/1-home.png
-            adb shell input swipe 540 1700 540 500 300 && sleep 3 && adb exec-out screencap -p > out/2-drawer.png
+            adb shell input swipe 540 1100 540 300 250 && sleep 3 && adb exec-out screencap -p > out/2-drawer.png
             adb shell am force-stop app.onlysearch && adb shell am start -W -n app.onlysearch/.MainActivity --es query ca && sleep 6 && adb exec-out screencap -p > out/3-search.png
             adb shell am force-stop app.onlysearch && adb shell am start -W -n app.onlysearch/.MainActivity --es query "'65 kg in pounds'" && sleep 6 && adb exec-out screencap -p > out/4-calc.png
             adb logcat -d -s AndroidRuntime:E | tee out/crash.txt

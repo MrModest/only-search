@@ -27,6 +27,8 @@ object Soulver {
         Os.setenv("TZ", TimeZone.getDefault().id, true)
         System.loadLibrary("SoulverBridge")
         ready = nativeInit(dir.absolutePath, Locale.getDefault().toLanguageTag().replace('-', '_'))
+        // The first evaluation loads unit, currency and date tables; pay that here rather than on the first keystroke.
+        if (ready) listOf("1 kg in lb", "\$10 + 15%", "3pm + 2 hours", "today + 1 week").forEach { nativeEval(it) }
         initMillis = (System.nanoTime() - start) / 1_000_000
         return ready
     }

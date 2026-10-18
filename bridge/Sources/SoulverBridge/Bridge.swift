@@ -36,7 +36,11 @@ public func nativeInit(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ p
     guard overrideProcessPath(inside: url.deletingLastPathComponent().path) else { return 0 }
     guard let bundle = ResourceBundle(url: url) else { return 0 }
     let customization = EngineCustomization(resourcesBundle: bundle, locale: Locale(identifier: swiftString(env, locale)))
-    calculator = Calculator(customization: customization)
+    let calc = Calculator(customization: customization)
+    var formatting = FormattingPreferences()
+    formatting.dp = 2
+    calc.formattingPreferences = formatting
+    calculator = calc
     return 1
 }
 
