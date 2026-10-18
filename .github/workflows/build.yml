@@ -76,6 +76,13 @@ jobs:
   emulator:
     needs: apk
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { api: "34", target: google_apis, required: true }
+          - { api: "37.2", target: google_apis_ps16k, required: false } # Android 17, 16 KB pages; flaky on CI
+    continue-on-error: ${{ !matrix.required }}
     steps:
       - uses: actions/download-artifact@v4
         with: { name: test-apks, path: apks }
@@ -88,13 +95,13 @@ jobs:
       - name: Test on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: "37.2"
-          target: google_apis_ps16k
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.target }}
           arch: x86_64
           profile: pixel_6
           ram-size: 4096M
           cores: 4
-          disk-size: 8G
+          disk-size: 6G
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
@@ -115,4 +122,4 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: emulator-results, path: out }
+        with: { name: "emulator-results-${{ matrix.api }}", path: out }
