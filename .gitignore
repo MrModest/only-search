@@ -7,3 +7,4 @@ local.properties
 bridge/soulver/
 android/app/src/main/jniLibs/
 android/app/src/main/assets/soulver/
+.serena/
