@@ -1,3 +1,4 @@
+import Android
 import CJNI
 import Foundation
 import SoulverCore
@@ -18,9 +19,22 @@ private func javaString(_ env: UnsafeMutablePointer<JNIEnv?>, _ s: String) -> js
     return utf16.withUnsafeBufferPointer { env.pointee!.pointee.NewString!(env, $0.baseAddress, jsize($0.count)) }
 }
 
+// SoulverCore also resolves its bundle through SwiftPM's Bundle.module, which looks next to the main executable
+// (/system/bin/app_process on Android). Point CoreFoundation's cached process path into the directory holding
+// the bundle so that lookup succeeds. Must run before anything touches Bundle.main.
+private func overrideProcessPath(inside dir: String) -> Bool {
+    let handle = dlopen("libFoundation.so", RTLD_NOW)
+    guard let sym = dlsym(handle, "_CFGetProcessPath") ?? dlsym(nil, "_CFGetProcessPath") else { return false }
+    let getProcessPath = unsafeBitCast(sym, to: (@convention(c) () -> UnsafeMutablePointer<UnsafePointer<CChar>?>).self)
+    getProcessPath().pointee = UnsafePointer(strdup(dir + "/onlysearch"))
+    return Bundle.main.bundleURL.path == dir
+}
+
 @_cdecl("Java_app_onlysearch_Soulver_nativeInit")
 public func nativeInit(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ path: jstring?, _ locale: jstring?) -> jboolean {
-    guard let bundle = ResourceBundle(url: URL(fileURLWithPath: swiftString(env, path))) else { return 0 }
+    let url = URL(fileURLWithPath: swiftString(env, path))
+    guard overrideProcessPath(inside: url.deletingLastPathComponent().path) else { return 0 }
+    guard let bundle = ResourceBundle(url: url) else { return 0 }
     let customization = EngineCustomization(resourcesBundle: bundle, locale: Locale(identifier: swiftString(env, locale)))
     calculator = Calculator(customization: customization)
     return 1
