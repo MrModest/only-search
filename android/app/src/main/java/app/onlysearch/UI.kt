@@ -247,7 +247,7 @@ private fun DrawerScreen(apps: Apps, onClose: () -> Unit) {
     // Grid index of each section header, for the letter scrubber.
     val headerIndex = remember(sections, frequent) {
         var i = if (frequent.isEmpty()) 0 else 1 + frequent.size
-        sections.map { (letter, items) -> (letter to i).also { i += 1 + items.size } }.toMap()
+        sections.map { (letter, group) -> (letter to i).also { i += 1 + group.size } }.toMap()
     }
     val pullToClose = remember {
         object : NestedScrollConnection {
@@ -267,9 +267,9 @@ private fun DrawerScreen(apps: Apps, onClose: () -> Unit) {
                     item(span = { GridItemSpan(5) }) { Section("Frequent") }
                     items(frequent, key = { "f" + it.key }) { AppTile(apps, it, true, 40.dp, onLaunched = onClose) }
                 }
-                sections.forEach { (letter, items) ->
+                sections.forEach { (letter, group) ->
                     item(span = { GridItemSpan(5) }, key = "h$letter") { Section(letter.toString()) }
-                    items(items, key = { it.key }) { AppTile(apps, it, true, 40.dp, onLaunched = onClose) }
+                    items(group, key = { it.key }) { AppTile(apps, it, true, 40.dp, onLaunched = onClose) }
                 }
             }
             Column(Modifier.align(Alignment.CenterEnd).width(14.dp).pointerInput(headerIndex) {
@@ -331,6 +331,7 @@ private fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit, o
         when {
             c != null -> copy(c)
             top != null -> { apps.launch(top); onDone() }
+            else -> {}
         }
     }
 

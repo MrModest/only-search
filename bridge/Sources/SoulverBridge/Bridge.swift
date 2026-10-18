@@ -7,15 +7,15 @@ nonisolated(unsafe) private var calculator: Calculator?
 
 private func swiftString(_ env: UnsafeMutablePointer<JNIEnv?>, _ s: jstring?) -> String {
     guard let s, let fn = env.pointee?.pointee else { return "" }
-    let count = Int(fn.GetStringLength(env, s))
-    guard let chars = fn.GetStringChars(env, s, nil) else { return "" }
-    defer { fn.ReleaseStringChars(env, s, chars) }
+    let count = Int(fn.GetStringLength!(env, s))
+    guard let chars = fn.GetStringChars!(env, s, nil) else { return "" }
+    defer { fn.ReleaseStringChars!(env, s, chars) }
     return String(decoding: UnsafeBufferPointer(start: chars, count: count), as: UTF16.self)
 }
 
 private func javaString(_ env: UnsafeMutablePointer<JNIEnv?>, _ s: String) -> jstring? {
     let utf16 = Array(s.utf16)
-    return utf16.withUnsafeBufferPointer { env.pointee!.pointee.NewString(env, $0.baseAddress, jsize($0.count)) }
+    return utf16.withUnsafeBufferPointer { env.pointee!.pointee.NewString!(env, $0.baseAddress, jsize($0.count)) }
 }
 
 @_cdecl("Java_app_onlysearch_Soulver_nativeInit")
