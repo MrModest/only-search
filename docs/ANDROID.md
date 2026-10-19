@@ -25,6 +25,13 @@ CI emulators: Android 14 (required) and Android 17 / 37.2 with 16 KB pages (best
 - Measured on the CI emulator (x86_64, software GPU, slow): init ~380 ms, first eval ~670 ms (now warmed up during init), warm evals ~0.7–8 ms (500-eval average 7.7 ms). Real-device numbers still to measure.
 - Currency: built-in standard rates only (100 USD → €87.93). **Crypto is not covered by the standard rates** (`0.5 BTC in USD` → `$0.50`, wrong). This Android build exposes `CurrencyRateProvider` but no ECB provider, so live fiat + crypto rates need our own provider (fetch rates in Kotlin or Swift, return them from `rateFor`).
 
+## Signing and versions
+Releases are signed with a permanent PKCS12 key, alias `onlysearch`, certificate SHA-256 `a67aee0e…3cf3`.
+- Stored as GitHub secrets `RELEASE_KEYSTORE_B64` and `RELEASE_KEYSTORE_PASSWORD`.
+- Local backup: `~/.config/only-search/release.p12` + `release.password`. **Losing it means users must uninstall to update.**
+- versionCode = `GITHUB_RUN_NUMBER`, versionName `0.2.<run>`.
+- Builds before v0.2.32 used per-run debug keys, so each of those needed an uninstall.
+
 ## Motion (Nova-inspired, v0.2.0)
 Finger-tracked drawer (`Animatable` 0..1, spring settle), home scale/fade behind drawer and search, window background blur, `ActivityOptions.makeScaleUpAnimation` launches, return-home zoom, press-scale, long-press shortcut popup, scrubber bubble.
 Two gotchas found the hard way:
@@ -36,6 +43,6 @@ CI emulator gesture tests are unreliable: the runner is CPU-starved, `input swip
 ## Known gaps / next
 - Live currency + crypto rate provider (see above).
 - Alternative-units table from the mock-up (needs a second conversion per target unit).
-- Real release keystore; licensing with Soulver before any public distribution.
+- Licensing with Soulver before any public distribution.
 - Fonts: system font instead of Figtree/IBM Plex Mono.
 - Weather in the home header: no data source; date only.
