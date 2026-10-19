@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetProviderInfo
 import android.content.Intent
 import android.os.Build
 import android.text.format.DateFormat
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -143,10 +144,13 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     var drawerBlur by remember { mutableStateOf(false) }
     fun settleDrawer(open: Boolean) = scope.launch {
         if (!open) drawerBlur = false
+        Log.d("Launcher", "settle open=$open from=${drawer.value}")
         drawer.animateTo(if (open) 1f else 0f, Settle)
         if (open) drawerBlur = true
     }
     fun dragDrawer(deltaPx: Float) = scope.launch { drawer.snapTo((drawer.value - deltaPx / screenPx).coerceIn(0f, 1f)) }
+    val drawerShown by remember { derivedStateOf { drawer.value > 0f || drawer.isRunning } }
+    val drawerOpening by remember { derivedStateOf { drawer.targetValue > 0f } }
     fun closeSearch() { searching = false; query = "" }
 
     // Home button: animate back. Leaving to an app: reset silently so the launch animation isn't disturbed.
@@ -158,7 +162,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             enter.snapTo(0f); enter.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 300f))
         }
     }
-    BackHandler(searching || picking || drawer.targetValue > 0f) {
+    BackHandler(searching || picking || drawerOpening) {
         when { picking -> picking = false; searching -> closeSearch(); else -> settleDrawer(false) }
     }
 
@@ -203,11 +207,11 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
                 onSearch = { searching = true },
                 onDrawer = { settleDrawer(true) },
                 onDrag = { dragDrawer(it) },
-                onDragEnd = { v -> settleDrawer(v < -600f || (v < 600f && drawer.value > 0.3f)) },
+                onDragEnd = { v -> Log.d("Launcher", "drag end v=$v at=${drawer.value}"); settleDrawer(v < -600f || (v < 600f && drawer.value > 0.3f)) },
                 onPickWidget = { picking = true },
             )
         }
-        if (drawer.value > 0f || drawer.isRunning) {
+        if (drawerShown) {
             Box(Modifier.fillMaxSize().graphicsLayer {
                 translationY = (1f - drawer.value) * size.height * 0.6f
                 alpha = (drawer.value * 1.6f).coerceAtMost(1f)
