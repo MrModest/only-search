@@ -25,6 +25,14 @@ CI emulators: Android 14 (required) and Android 17 / 37.2 with 16 KB pages (best
 - Measured on the CI emulator (x86_64, software GPU, slow): init ~380 ms, first eval ~670 ms (now warmed up during init), warm evals ~0.7–8 ms (500-eval average 7.7 ms). Real-device numbers still to measure.
 - Currency: built-in standard rates only (100 USD → €87.93). **Crypto is not covered by the standard rates** (`0.5 BTC in USD` → `$0.50`, wrong). This Android build exposes `CurrencyRateProvider` but no ECB provider, so live fiat + crypto rates need our own provider (fetch rates in Kotlin or Swift, return them from `rateFor`).
 
+## Motion (Nova-inspired, v0.2.0)
+Finger-tracked drawer (`Animatable` 0..1, spring settle), home scale/fade behind drawer and search, window background blur, `ActivityOptions.makeScaleUpAnimation` launches, return-home zoom, press-scale, long-press shortcut popup, scrubber bubble.
+Two gotchas found the hard way:
+- The drawer layer must stay composed (parked off-screen). Adding it on top of the home screen mid-swipe cancels the drag.
+- The home screen's gesture lambdas must be stable (`HomeActions` remembered once). Recomposing it mid-swipe also cancels the drag.
+- Window blur changes are only made when no finger is down, to avoid disturbing gestures.
+CI emulator gesture tests are unreliable: the runner is CPU-starved, `input swipe` gets batched, and System UI ANR dialogs appear. Verify motion on a real device.
+
 ## Known gaps / next
 - Live currency + crypto rate provider (see above).
 - Alternative-units table from the mock-up (needs a second conversion per target unit).
