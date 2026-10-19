@@ -143,6 +143,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     var drawerBlur by remember { mutableStateOf(false) }
     fun settleDrawer(open: Boolean) = scope.launch {
         if (!open) drawerBlur = false
+        android.util.Log.d("Launcher", "settle open=$open at=${drawer.value}", Throwable())
         drawer.animateTo(if (open) 1f else 0f, Settle)
         if (open) drawerBlur = true
     }
@@ -151,6 +152,8 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     fun closeSearch() { searching = false; query = "" }
 
     // Home button: animate back. Leaving to an app: reset silently so the launch animation isn't disturbed.
+    LaunchedEffect(Unit) { snapshotFlow { drawer.value }.collect { if (it == 0f || it == 1f) android.util.Log.d("Launcher", "drawer=$it") } }
+    LaunchedEffect(homeTick, stopTick, resumeTick) { android.util.Log.d("Launcher", "ticks home=$homeTick stop=$stopTick resume=$resumeTick") }
     LaunchedEffect(homeTick) { if (homeTick > 0) { closeSearch(); picking = false; settleDrawer(false) } }
     LaunchedEffect(stopTick) { if (stopTick > 0) { closeSearch(); picking = false; drawerBlur = false; drawer.snapTo(0f) } }
     LaunchedEffect(resumeTick) {
