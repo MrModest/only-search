@@ -116,8 +116,7 @@ jobs:
             adb logcat -d -s SoulverTest:I AndroidRuntime:E DEBUG:* linker:* | tee out/logcat.txt
             adb shell am start -W -n app.onlysearch/.MainActivity && sleep 8 && adb exec-out screencap -p > out/1-home.png
             adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null; sleep 1
-            adb shell input swipe 640 1800 640 600 400 && sleep 3 && adb exec-out screencap -p > out/2-drawer.png
-            adb logcat -d -s Launcher:D | tee out/launcher-log.txt
+            adb shell 'input motionevent DOWN 640 1800; for y in 1700 1600 1500 1400 1300 1200 1100 1000 900 800 700 600; do input motionevent MOVE 640 $y; done; input motionevent UP 640 600' && sleep 3 && adb exec-out screencap -p > out/2-drawer.png
             adb shell am force-stop app.onlysearch && adb shell am start -W -n app.onlysearch/.MainActivity --es query ca && sleep 6 && adb exec-out screencap -p > out/3-search.png
             adb shell am force-stop app.onlysearch && adb shell am start -W -n app.onlysearch/.MainActivity --es query "'65 kg in pounds'" && sleep 6 && adb exec-out screencap -p > out/4-calc.png
             adb logcat -d -s AndroidRuntime:E | tee out/crash.txt

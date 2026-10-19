@@ -143,17 +143,14 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     var drawerBlur by remember { mutableStateOf(false) }
     fun settleDrawer(open: Boolean) = scope.launch {
         if (!open) drawerBlur = false
-        android.util.Log.d("Launcher", "settle open=$open at=${drawer.value}", Throwable())
         drawer.animateTo(if (open) 1f else 0f, Settle)
         if (open) drawerBlur = true
     }
-    fun dragDrawer(deltaPx: Float) = scope.launch { android.util.Log.d("Launcher", "drag $deltaPx -> ${drawer.value}"); drawer.snapTo((drawer.value - deltaPx / screenPx).coerceIn(0f, 1f)) }
+    fun dragDrawer(deltaPx: Float) = scope.launch { drawer.snapTo((drawer.value - deltaPx / screenPx).coerceIn(0f, 1f)) }
     val drawerOpening by remember { derivedStateOf { drawer.targetValue > 0f } }
     fun closeSearch() { searching = false; query = "" }
 
     // Home button: animate back. Leaving to an app: reset silently so the launch animation isn't disturbed.
-    LaunchedEffect(Unit) { snapshotFlow { drawer.value }.collect { if (it == 0f || it == 1f) android.util.Log.d("Launcher", "drawer=$it") } }
-    LaunchedEffect(homeTick, stopTick, resumeTick) { android.util.Log.d("Launcher", "ticks home=$homeTick stop=$stopTick resume=$resumeTick") }
     LaunchedEffect(homeTick) { if (homeTick > 0) { closeSearch(); picking = false; settleDrawer(false) } }
     LaunchedEffect(stopTick) { if (stopTick > 0) { closeSearch(); picking = false; drawerBlur = false; drawer.snapTo(0f) } }
     LaunchedEffect(resumeTick) {
@@ -202,7 +199,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             onSearch = { searching = true },
             onDrawer = { settleDrawer(true) },
             onDrag = { dragDrawer(it) },
-            onDragEnd = { v -> android.util.Log.d("Launcher", "end v=$v at=${drawer.value}"); settleDrawer(v < -600f || (v < 600f && drawer.value > 0.3f)) },
+            onDragEnd = { v -> settleDrawer(v < -600f || (v < 600f && drawer.value > 0.3f)) },
             onPickWidget = { picking = true },
         )
     }
