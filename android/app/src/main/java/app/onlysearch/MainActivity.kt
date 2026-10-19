@@ -51,6 +51,11 @@ class MainActivity : ComponentActivity() {
         if (intent.hasCategory(Intent.CATEGORY_HOME)) homeTick.intValue++
     }
 
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (ev.actionMasked != android.view.MotionEvent.ACTION_MOVE || ev.historySize == 0) android.util.Log.d("Launcher", "touch ${android.view.MotionEvent.actionToString(ev.action)} y=${ev.y}")
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onStart() { super.onStart(); widgets.host.startListening() }
     override fun onStop() { super.onStop(); runCatching { widgets.host.stopListening() }; stopTick.intValue++ }
     override fun onResume() { super.onResume(); resumeTick.intValue++ }

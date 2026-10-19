@@ -146,7 +146,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
         drawer.animateTo(if (open) 1f else 0f, Settle)
         if (open) drawerBlur = true
     }
-    fun dragDrawer(deltaPx: Float) = scope.launch { drawer.snapTo((drawer.value - deltaPx / screenPx).coerceIn(0f, 1f)) }
+    fun dragDrawer(deltaPx: Float) = scope.launch { android.util.Log.d("Launcher", "drag $deltaPx -> ${drawer.value}"); drawer.snapTo((drawer.value - deltaPx / screenPx).coerceIn(0f, 1f)) }
     val drawerOpening by remember { derivedStateOf { drawer.targetValue > 0f } }
     fun closeSearch() { searching = false; query = "" }
 
@@ -199,7 +199,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             onSearch = { searching = true },
             onDrawer = { settleDrawer(true) },
             onDrag = { dragDrawer(it) },
-            onDragEnd = { v -> settleDrawer(v < -600f || (v < 600f && drawer.value > 0.3f)) },
+            onDragEnd = { v -> android.util.Log.d("Launcher", "end v=$v at=${drawer.value}"); settleDrawer(v < -600f || (v < 600f && drawer.value > 0.3f)) },
             onPickWidget = { picking = true },
         )
     }
