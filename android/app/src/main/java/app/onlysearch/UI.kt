@@ -5,7 +5,6 @@ import android.appwidget.AppWidgetProviderInfo
 import android.content.Intent
 import android.os.Build
 import android.text.format.DateFormat
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -144,7 +143,6 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     var drawerBlur by remember { mutableStateOf(false) }
     fun settleDrawer(open: Boolean) = scope.launch {
         if (!open) drawerBlur = false
-        Log.d("Launcher", "settle open=$open from=${drawer.value}")
         drawer.animateTo(if (open) 1f else 0f, Settle)
         if (open) drawerBlur = true
     }
@@ -195,6 +193,18 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
         }
     }
 
+    // Built once: if HomeScreen got new lambdas while the drawer starts to show, it would recompose
+    // mid-swipe and the drag gesture would be cancelled.
+    val homeActions = remember(screenPx) {
+        HomeActions(
+            onSearch = { searching = true },
+            onDrawer = { settleDrawer(true) },
+            onDrag = { dragDrawer(it) },
+            onDragEnd = { v -> settleDrawer(v < -600f || (v < 600f && drawer.value > 0.3f)) },
+            onPickWidget = { picking = true },
+        )
+    }
+
     Box(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().graphicsLayer {
             val p = max(drawer.value, searchProgress)
@@ -202,14 +212,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             scaleX = s; scaleY = s
             alpha = (1f - p) * enter.value
         }) {
-            HomeScreen(
-                apps, widgets,
-                onSearch = { searching = true },
-                onDrawer = { settleDrawer(true) },
-                onDrag = { dragDrawer(it) },
-                onDragEnd = { v -> Log.d("Launcher", "drag end v=$v at=${drawer.value}"); settleDrawer(v < -600f || (v < 600f && drawer.value > 0.3f)) },
-                onPickWidget = { picking = true },
-            )
+            HomeScreen(apps, widgets, homeActions)
         }
         if (drawerShown) {
             Box(Modifier.fillMaxSize().graphicsLayer {
@@ -232,12 +235,15 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
 
 // ---------- Home ----------
 
+private class HomeActions(
+    val onSearch: () -> Unit, val onDrawer: () -> Unit, val onDrag: (Float) -> Unit, val onDragEnd: (Float) -> Unit, val onPickWidget: () -> Unit,
+)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun HomeScreen(
-    apps: Apps, widgets: Widgets,
-    onSearch: () -> Unit, onDrawer: () -> Unit, onDrag: (Float) -> Unit, onDragEnd: (Float) -> Unit, onPickWidget: () -> Unit,
-) {
+private fun HomeScreen(apps: Apps, widgets: Widgets, actions: HomeActions) {
+    val (onSearch, onDrawer, onDrag) = Triple(actions.onSearch, actions.onDrawer, actions.onDrag)
+    val (onDragEnd, onPickWidget) = actions.onDragEnd to actions.onPickWidget
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
