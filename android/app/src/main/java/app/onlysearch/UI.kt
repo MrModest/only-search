@@ -140,13 +140,18 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     var picking by remember { mutableStateOf(false) }
     val searchProgress by animateFloatAsState(if (searching) 1f else 0f, tween(180), label = "search")
 
-    fun settleDrawer(open: Boolean) = scope.launch { drawer.animateTo(if (open) 1f else 0f, Settle) }
+    var drawerBlur by remember { mutableStateOf(false) }
+    fun settleDrawer(open: Boolean) = scope.launch {
+        if (!open) drawerBlur = false
+        drawer.animateTo(if (open) 1f else 0f, Settle)
+        if (open) drawerBlur = true
+    }
     fun dragDrawer(deltaPx: Float) = scope.launch { drawer.snapTo((drawer.value - deltaPx / screenPx).coerceIn(0f, 1f)) }
     fun closeSearch() { searching = false; query = "" }
 
     // Home button: animate back. Leaving to an app: reset silently so the launch animation isn't disturbed.
     LaunchedEffect(homeTick) { if (homeTick > 0) { closeSearch(); picking = false; settleDrawer(false) } }
-    LaunchedEffect(stopTick) { if (stopTick > 0) { closeSearch(); picking = false; drawer.snapTo(0f) } }
+    LaunchedEffect(stopTick) { if (stopTick > 0) { closeSearch(); picking = false; drawerBlur = false; drawer.snapTo(0f) } }
     LaunchedEffect(resumeTick) {
         if (apps.returningFromApp) {
             apps.returningFromApp = false
@@ -157,11 +162,14 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
         when { picking -> picking = false; searching -> closeSearch(); else -> settleDrawer(false) }
     }
 
-    // Wallpaper blurs as the drawer or search comes up (Android 12+, needs cross-window blur enabled).
-    LaunchedEffect(Unit) {
-        snapshotFlow { max(drawer.value, searchProgress) }.collect { p ->
-            if (Build.VERSION.SDK_INT >= 31) activity.window.setBackgroundBlurRadius((p * 48).roundToInt())
-        }
+    // Wallpaper blurs behind the open drawer / search (Android 12+, needs cross-window blur enabled).
+    // Only changed while no finger is down: updating window attributes mid-gesture cancels the touch.
+    val blurred = drawerBlur || searching
+    LaunchedEffect(blurred) {
+        if (Build.VERSION.SDK_INT < 31) return@LaunchedEffect
+        val from = if (blurred) 0 else 48
+        val to = 48 - from
+        repeat(6) { i -> activity.window.setBackgroundBlurRadius(from + (to - from) * (i + 1) / 6); delay(16) }
     }
 
     // Pull down at the top of the drawer to drag it closed; fling decides where it settles.
