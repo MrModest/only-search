@@ -13,15 +13,29 @@ android {
         applicationId = "app.onlysearch"
         minSdk = 28 // SoulverCore's Android build targets API 28
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI run number, so every build installs as an update over the previous one.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toInt() ?: 1
+        versionName = "0.2.${System.getenv("GITHUB_RUN_NUMBER") ?: "0"}"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // One permanent key (GitHub secret, decoded by CI) so updates install over the previous version.
+    // Local builds without it fall back to the debug key.
+    val keystore = System.getenv("RELEASE_KEYSTORE")?.let(::file)?.takeIf { it.exists() }
+    signingConfigs {
+        if (keystore != null) create("release") {
+            storeFile = keystore
+            storeType = "PKCS12"
+            storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+            keyAlias = "onlysearch"
+            keyPassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug") // ponytail: debug key, add a real keystore before publishing
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
     testBuildType = "release"
