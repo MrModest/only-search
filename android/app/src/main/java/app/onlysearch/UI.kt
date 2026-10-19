@@ -147,7 +147,6 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
         if (open) drawerBlur = true
     }
     fun dragDrawer(deltaPx: Float) = scope.launch { drawer.snapTo((drawer.value - deltaPx / screenPx).coerceIn(0f, 1f)) }
-    val drawerShown by remember { derivedStateOf { drawer.value > 0f || drawer.isRunning } }
     val drawerOpening by remember { derivedStateOf { drawer.targetValue > 0f } }
     fun closeSearch() { searching = false; query = "" }
 
@@ -214,13 +213,12 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
         }) {
             HomeScreen(apps, widgets, homeActions)
         }
-        if (drawerShown) {
-            Box(Modifier.fillMaxSize().graphicsLayer {
-                translationY = (1f - drawer.value) * size.height * 0.6f
-                alpha = (drawer.value * 1.6f).coerceAtMost(1f)
-            }) {
-                DrawerScreen(apps, drawerScroll, onSearch = { query = it; searching = true })
-            }
+        // Always composed and parked below the screen: adding it under the finger mid-swipe cancels the drag.
+        Box(Modifier.fillMaxSize().graphicsLayer {
+            translationY = (1f - drawer.value) * size.height
+            alpha = (drawer.value * 1.6f).coerceAtMost(1f)
+        }) {
+            DrawerScreen(apps, drawerScroll, onSearch = { query = it; searching = true })
         }
         AnimatedVisibility(
             searching,
