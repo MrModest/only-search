@@ -53,7 +53,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -450,8 +452,11 @@ private fun Field(value: String, onValue: (String) -> Unit, hint: String, modifi
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     if (autoFocus) LaunchedEffect(Unit) { focus.requestFocus(); keyboard?.show() }
+    // Text set from outside (drawer hand-off, history tap) puts the cursor at the end.
+    var field by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    if (field.text != value) field = TextFieldValue(value, TextRange(value.length))
     BasicTextField(
-        value, onValue, modifier.focusRequester(focus),
+        field, { field = it; if (it.text != value) onValue(it.text) }, modifier.focusRequester(focus),
         textStyle = TextStyle(color = Fg, fontSize = 14.sp),
         singleLine = true,
         cursorBrush = SolidColor(Accent),
