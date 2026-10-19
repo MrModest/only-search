@@ -1,10 +1,22 @@
 package app.onlysearch
 
+import android.app.Activity
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Intent
+import android.os.Build
 import android.text.format.DateFormat
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -12,9 +24,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -27,6 +41,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
@@ -40,35 +61,58 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toAndroidRect
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.Date
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 // Design D (docs/DESIGN.md): tight padding, near-square corners, amber accent on a dark sheet.
+// Motion follows Nova Launcher: finger-tracked drawer, icon zoom launches, press scale, popup shortcuts.
 private val Sheet = Color(0xFF17191C)
 private val BarBg = Color(0xFF1C1F22)
 private val Line = Color(0xFF2C3135)
@@ -76,28 +120,99 @@ private val Selected = Color(0xFF23272B)
 private val Accent = Color(0xFFF5B04A)
 private val Muted = Color(0xFF7D868E)
 private val Fg = Color(0xFFE8EAED)
-private val Glass = Color(0x6B12161E)
 private val Scrim = Color(0xD90E1116)
+private val PopupBg = Color(0xF21E2124)
 private val Mono = FontFamily.Monospace
 private val Small = RoundedCornerShape(5.dp)
 private val TextShadow = Shadow(Color(0x66000000), Offset(0f, 1f), 3f)
-
-enum class Screen { Home, Drawer, Search }
+private val Settle = spring<Float>(dampingRatio = 0.9f, stiffness = 420f)
 
 @Composable
-fun Launcher(apps: Apps, widgets: Widgets, resetTick: Int, initialQuery: String?) {
-    var screen by remember { mutableStateOf(if (initialQuery != null) Screen.Search else Screen.Home) }
+fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeTick: Int, initialQuery: String?) {
+    val scope = rememberCoroutineScope()
+    val activity = LocalContext.current as Activity
+    val screenPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+
+    val drawer = remember { Animatable(0f) } // 0 = closed, 1 = open; follows the finger while dragging
+    val enter = remember { Animatable(1f) } // home "icons zoom back in" after returning from an app
+    var searching by remember { mutableStateOf(initialQuery != null) }
     var query by remember { mutableStateOf(initialQuery.orEmpty()) }
     var picking by remember { mutableStateOf(false) }
-    val home = { screen = Screen.Home; query = ""; picking = false }
-    LaunchedEffect(resetTick) { if (resetTick > 0) home() }
-    BackHandler(screen != Screen.Home || picking) { home() }
+    val searchProgress by animateFloatAsState(if (searching) 1f else 0f, tween(180), label = "search")
+
+    fun settleDrawer(open: Boolean) = scope.launch { drawer.animateTo(if (open) 1f else 0f, Settle) }
+    fun dragDrawer(deltaPx: Float) = scope.launch { drawer.snapTo((drawer.value - deltaPx / screenPx).coerceIn(0f, 1f)) }
+    fun closeSearch() { searching = false; query = "" }
+
+    // Home button: animate back. Leaving to an app: reset silently so the launch animation isn't disturbed.
+    LaunchedEffect(homeTick) { if (homeTick > 0) { closeSearch(); picking = false; settleDrawer(false) } }
+    LaunchedEffect(stopTick) { if (stopTick > 0) { closeSearch(); picking = false; drawer.snapTo(0f) } }
+    LaunchedEffect(resumeTick) {
+        if (apps.returningFromApp) {
+            apps.returningFromApp = false
+            enter.snapTo(0f); enter.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 300f))
+        }
+    }
+    BackHandler(searching || picking || drawer.targetValue > 0f) {
+        when { picking -> picking = false; searching -> closeSearch(); else -> settleDrawer(false) }
+    }
+
+    // Wallpaper blurs as the drawer or search comes up (Android 12+, needs cross-window blur enabled).
+    LaunchedEffect(Unit) {
+        snapshotFlow { max(drawer.value, searchProgress) }.collect { p ->
+            if (Build.VERSION.SDK_INT >= 31) activity.window.setBackgroundBlurRadius((p * 48).roundToInt())
+        }
+    }
+
+    // Pull down at the top of the drawer to drag it closed; fling decides where it settles.
+    val drawerScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (drawer.value < 1f && available.y < 0) { dragDrawer(available.y); return available.copy(x = 0f) }
+                return Offset.Zero
+            }
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (available.y > 0 && source == NestedScrollSource.UserInput) { dragDrawer(available.y); return available.copy(x = 0f) }
+                return Offset.Zero
+            }
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (drawer.value >= 1f) return Velocity.Zero
+                settleDrawer(available.y < -600f || (available.y < 600f && drawer.value > 0.7f))
+                return available
+            }
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
-        when (screen) {
-            Screen.Home -> HomeScreen(apps, widgets, onSearch = { screen = Screen.Search }, onDrawer = { screen = Screen.Drawer }, onPickWidget = { picking = true })
-            Screen.Drawer -> DrawerScreen(apps, onClose = home, onSearch = { query = it; screen = Screen.Search })
-            Screen.Search -> SearchScreen(apps, query, { query = it }, onDone = home)
+        Box(Modifier.fillMaxSize().graphicsLayer {
+            val p = max(drawer.value, searchProgress)
+            val s = (1f - 0.06f * p) * (0.9f + 0.1f * enter.value)
+            scaleX = s; scaleY = s
+            alpha = (1f - p) * enter.value
+        }) {
+            HomeScreen(
+                apps, widgets,
+                onSearch = { searching = true },
+                onDrawer = { settleDrawer(true) },
+                onDrag = { dragDrawer(it) },
+                onDragEnd = { v -> settleDrawer(v < -600f || (v < 600f && drawer.value > 0.3f)) },
+                onPickWidget = { picking = true },
+            )
+        }
+        if (drawer.value > 0f || drawer.isRunning) {
+            Box(Modifier.fillMaxSize().graphicsLayer {
+                translationY = (1f - drawer.value) * size.height * 0.6f
+                alpha = (drawer.value * 1.6f).coerceAtMost(1f)
+            }) {
+                DrawerScreen(apps, drawerScroll, onSearch = { query = it; searching = true })
+            }
+        }
+        AnimatedVisibility(
+            searching,
+            enter = fadeIn(tween(160)) + slideInVertically(tween(220)) { it / 12 },
+            exit = fadeOut(tween(120)) + slideOutVertically(tween(160)) { it / 12 },
+        ) {
+            SearchScreen(apps, query) { query = it }
         }
         if (picking) WidgetPicker(widgets) { picking = false }
     }
@@ -107,19 +222,20 @@ fun Launcher(apps: Apps, widgets: Widgets, resetTick: Int, initialQuery: String?
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun HomeScreen(apps: Apps, widgets: Widgets, onSearch: () -> Unit, onDrawer: () -> Unit, onPickWidget: () -> Unit) {
+private fun HomeScreen(
+    apps: Apps, widgets: Widgets,
+    onSearch: () -> Unit, onDrawer: () -> Unit, onDrag: (Float) -> Unit, onDragEnd: (Float) -> Unit, onPickWidget: () -> Unit,
+) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf(false) }
-    var dragged by remember { mutableFloatStateOf(0f) }
     Column(
         Modifier.fillMaxSize()
-            .draggable(
-                rememberDraggableState { dragged += it }, Orientation.Vertical,
-                onDragStarted = { dragged = 0f },
-                onDragStopped = { velocity -> if (dragged < -100 || velocity < -800) onDrawer() },
-            )
-            .combinedClickable(interactionSource = null, indication = null, onLongClick = { menu = true }) {}
+            .draggable(rememberDraggableState(onDrag), Orientation.Vertical, onDragStopped = { onDragEnd(it) })
+            .combinedClickable(interactionSource = null, indication = null, onLongClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress); menu = true
+            }) {}
             .systemBarsPadding().padding(horizontal = 6.dp)
     ) {
         Clock()
@@ -195,6 +311,14 @@ private fun WidgetPicker(widgets: Widgets, onClose: () -> Unit) {
 
 // ---------- Apps ----------
 
+/** Tracks a composable's on-screen bounds so a launch can zoom out of it. */
+@Composable
+private fun rememberLaunchSource(): Pair<Modifier, () -> LaunchSource> {
+    val view = LocalView.current
+    var bounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    return Modifier.onGloballyPositioned { bounds = it.boundsInWindow() } to { LaunchSource(view, bounds.toAndroidRect()) }
+}
+
 @Composable
 private fun AppGrid(apps: Apps, list: List<App>, labels: Boolean) {
     if (list.isEmpty()) return
@@ -210,42 +334,98 @@ private fun AppGrid(apps: Apps, list: List<App>, labels: Boolean) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AppTile(apps: Apps, app: App, label: Boolean, size: Dp, modifier: Modifier = Modifier, onLaunched: () -> Unit = {}) {
+private fun AppTile(apps: Apps, app: App, label: Boolean, size: Dp, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed || menu) 0.88f else 1f, spring(dampingRatio = 0.6f, stiffness = 700f), label = "press")
+    val (track, source) = rememberLaunchSource()
     Box(modifier) {
         Column(
-            Modifier.fillMaxWidth().combinedClickable(onLongClick = { menu = true }) { apps.launch(app); onLaunched() },
+            Modifier.fillMaxWidth().combinedClickable(
+                interactionSource = interaction, indication = null,
+                onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menu = true },
+            ) { apps.launch(app, source()) },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Icon(apps, app, size)
+            Icon(apps, app, size, track.graphicsLayer { scaleX = scale; scaleY = scale })
             if (label) Text(app.label, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Medium, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, style = TextStyle(shadow = TextShadow), modifier = Modifier.padding(top = 3.dp, start = 2.dp, end = 2.dp))
         }
-        AppMenu(apps, app, menu) { menu = false }
+        if (menu) AppPopup(apps, app) { menu = false }
     }
 }
 
 @Composable
-private fun Icon(apps: Apps, app: App, size: Dp) {
+private fun Icon(apps: Apps, app: App, size: Dp, modifier: Modifier = Modifier) {
     val bmp = apps.icons[app.key]
-    val m = Modifier.size(size).clip(RoundedCornerShape(size * 0.2f))
+    val m = modifier.size(size).clip(RoundedCornerShape(size * 0.2f))
     if (bmp != null) Image(bmp, app.label, m) else Box(m.background(Line))
 }
 
+/** Places the popup above its anchor (below if there's no room), horizontally centred and kept on screen. */
+private object AboveAnchor : PopupPositionProvider {
+    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+        val x = (anchorBounds.center.x - popupContentSize.width / 2).coerceIn(0, max(0, windowSize.width - popupContentSize.width))
+        val above = anchorBounds.top - popupContentSize.height
+        return IntOffset(x, if (above >= 0) above else anchorBounds.bottom)
+    }
+}
+
+/** Nova-style long-press card: the app's shortcuts, then a row of quick actions. Scales in from the icon. */
 @Composable
-private fun AppMenu(apps: Apps, app: App, expanded: Boolean, onDismiss: () -> Unit) {
-    DropdownMenu(expanded, onDismiss) {
-        DropdownMenuItem({ Text(if (app.key in apps.home) "Remove from home" else "Add to home") }, { apps.toggleHome(app); onDismiss() })
-        DropdownMenuItem({ Text(if (app.key in apps.dock) "Remove from dock" else "Add to dock") }, { apps.toggleDock(app); onDismiss() })
-        DropdownMenuItem({ Text("App info") }, { apps.appInfo(app); onDismiss() })
-        DropdownMenuItem({ Text("Uninstall") }, { apps.uninstall(app); onDismiss() })
+private fun AppPopup(apps: Apps, app: App, onDismiss: () -> Unit) {
+    val shortcuts = remember(app) { apps.shortcuts(app).take(4).map { it to apps.shortcutIcon(it) } }
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)) }
+    Popup(popupPositionProvider = AboveAnchor, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
+        Column(
+            Modifier.padding(6.dp).width(220.dp)
+                .graphicsLayer {
+                    val v = appear.value
+                    scaleX = 0.85f + 0.15f * v; scaleY = 0.85f + 0.15f * v; alpha = v.coerceIn(0f, 1f)
+                    transformOrigin = TransformOrigin(0.5f, 1f)
+                }
+                .clip(RoundedCornerShape(6.dp)).background(PopupBg).border(1.dp, Line, RoundedCornerShape(6.dp))
+        ) {
+            Text(app.label, color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 4.dp))
+            shortcuts.forEach { (s, icon) ->
+                val (track, source) = rememberLaunchSource()
+                Row(Modifier.fillMaxWidth().then(track).clickable { apps.launch(s, source()); onDismiss() }.padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    val m = Modifier.size(22.dp).clip(RoundedCornerShape(4.dp))
+                    if (icon != null) Image(icon, null, m) else Box(m.background(Line))
+                    Text(s.label, color = Fg, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp))
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Line))
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                val onHome = app.key in apps.home
+                val onDock = app.key in apps.dock
+                PopupAction(if (onHome) Icons.Filled.Home else Icons.Outlined.Home, if (onHome) "Unpin" else "Home") { apps.toggleHome(app); onDismiss() }
+                PopupAction(if (onDock) Icons.Filled.Star else Icons.Outlined.Star, if (onDock) "Undock" else "Dock") { apps.toggleDock(app); onDismiss() }
+                PopupAction(Icons.Outlined.Info, "Info") { apps.appInfo(app); onDismiss() }
+                PopupAction(Icons.Outlined.Delete, "Uninstall") { apps.uninstall(app); onDismiss() }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.PopupAction(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Column(Modifier.weight(1f).clip(RoundedCornerShape(4.dp)).clickable(onClick = onClick).padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        androidx.compose.material3.Icon(icon, label, tint = Fg, modifier = Modifier.size(20.dp))
+        Text(label, color = Muted, fontSize = 9.5.sp, modifier = Modifier.padding(top = 2.dp))
     }
 }
 
 // ---------- Drawer ----------
 
 @Composable
-private fun DrawerScreen(apps: Apps, onClose: () -> Unit, onSearch: (String) -> Unit) {
+private fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: (String) -> Unit) {
     val grid = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     val frequent = apps.frequent(5)
@@ -255,40 +435,52 @@ private fun DrawerScreen(apps: Apps, onClose: () -> Unit, onSearch: (String) -> 
         var i = if (frequent.isEmpty()) 0 else 1 + frequent.size
         sections.map { (letter, group) -> (letter to i).also { i += 1 + group.size } }.toMap()
     }
-    val pullToClose = remember {
-        object : NestedScrollConnection {
-            var pulled = 0f
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 0) pulled += available.y else pulled = 0f
-                if (pulled > 250) { pulled = 0f; onClose() }
-                return Offset.Zero
-            }
-        }
-    }
+    var scrubLetter by remember { mutableStateOf<Char?>(null) }
+    var scrubY by remember { mutableFloatStateOf(0f) }
+    var scrubTop by remember { mutableFloatStateOf(0f) }
     Column(Modifier.fillMaxSize().background(Scrim).systemBarsPadding().imePadding()) {
         Box(Modifier.weight(1f)) {
-            LazyVerticalGrid(GridCells.Fixed(5), Modifier.fillMaxSize().padding(end = 14.dp).nestedScroll(pullToClose), grid,
+            LazyVerticalGrid(GridCells.Fixed(5), Modifier.fillMaxSize().padding(end = 14.dp).nestedScroll(scroll), grid,
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (frequent.isNotEmpty()) {
                     item(span = { GridItemSpan(5) }) { Section("Frequent") }
-                    items(frequent, key = { "f" + it.key }) { AppTile(apps, it, true, 40.dp, onLaunched = onClose) }
+                    items(frequent, key = { "f" + it.key }) { AppTile(apps, it, true, 40.dp) }
                 }
                 sections.forEach { (letter, group) ->
                     item(span = { GridItemSpan(5) }, key = "h$letter") { Section(letter.toString()) }
-                    items(group, key = { it.key }) { AppTile(apps, it, true, 40.dp, onLaunched = onClose) }
+                    items(group, key = { it.key }) { AppTile(apps, it, true, 40.dp) }
                 }
             }
-            Column(Modifier.align(Alignment.CenterEnd).width(14.dp).pointerInput(headerIndex) {
-                detectVerticalDragGestures { change, _ ->
-                    val letters = headerIndex.keys.toList()
-                    val i = (change.position.y / size.height * letters.size).toInt().coerceIn(0, letters.lastIndex)
-                    scope.launch { grid.scrollToItem(headerIndex[letters[i]]!!) }
+            val letters = headerIndex.keys.toList()
+            Column(Modifier.align(Alignment.CenterEnd).width(14.dp)
+                .onGloballyPositioned { scrubTop = it.positionInParent().y }
+                .pointerInput(headerIndex) {
+                    fun jump(y: Float) {
+                        val l = letters[(y / size.height * letters.size).toInt().coerceIn(0, letters.lastIndex)]
+                        scrubY = y
+                        if (l != scrubLetter) { scrubLetter = l; scope.launch { grid.scrollToItem(headerIndex[l]!!) } }
+                    }
+                    detectVerticalDragGestures(
+                        onDragStart = { jump(it.y) },
+                        onDragEnd = { scrubLetter = null },
+                        onDragCancel = { scrubLetter = null },
+                    ) { change, _ -> jump(change.position.y) }
+                }) {
+                letters.forEach { l ->
+                    Text(l.toString(), color = if (l == scrubLetter) Accent else Color(0xFF9AA3AB), fontSize = 9.sp, fontFamily = Mono,
+                        fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().clickable { scope.launch { grid.scrollToItem(headerIndex[l]!!) } })
                 }
-            }) {
-                headerIndex.keys.forEach { l ->
-                    Text(l.toString(), color = Color(0xFF9AA3AB), fontSize = 9.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.fillMaxWidth().clickable { scope.launch { grid.scrollToItem(headerIndex[l]!!) } }, textAlign = TextAlign.Center)
-                }
+            }
+            // Fast-scroll bubble next to the finger.
+            scrubLetter?.let { l ->
+                val bubble = 52.dp
+                val bubblePx = with(LocalDensity.current) { bubble.toPx() }
+                Box(
+                    Modifier.align(Alignment.TopEnd).offset { IntOffset(-(bubblePx * 0.9f).roundToInt(), (scrubTop + scrubY - bubblePx / 2).roundToInt()) }
+                        .size(bubble).clip(RoundedCornerShape(6.dp)).background(Accent),
+                    contentAlignment = Alignment.Center,
+                ) { Text(l.toString(), color = Color(0xFF17191C), fontSize = 26.sp, fontWeight = FontWeight.Bold) }
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -307,9 +499,10 @@ private data class Calc(val expression: String, val result: String, val micros: 
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit, onDone: () -> Unit) {
+private fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
+    val haptic = LocalHapticFeedback.current
     var calc by remember { mutableStateOf<Calc?>(null) }
     val currentQuery by rememberUpdatedState(query)
     LaunchedEffect(Unit) {
@@ -335,7 +528,7 @@ private fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit, o
         val c = calc; val top = matches.firstOrNull()?.first
         when {
             c != null -> copy(c)
-            top != null -> { apps.launch(top); onDone() }
+            top != null -> apps.launch(top)
             else -> {}
         }
     }
@@ -344,34 +537,42 @@ private fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit, o
         LazyColumn(Modifier.weight(1f)) {
             calc?.let { c ->
                 item(key = "calc") {
-                    Section("Calculator", "%.1f ms".format(c.micros / 1000.0))
-                    CalcCard(c) { copy(c) }
+                    Column(Modifier.animateItem()) {
+                        Section("Calculator", "%.1f ms".format(c.micros / 1000.0))
+                        CalcCard(c) { copy(c) }
+                    }
                 }
             }
             if (matches.isNotEmpty()) {
-                item(key = "apps") { Section("Apps", "${matches.size}") }
+                item(key = "apps") { Box(Modifier.animateItem()) { Section("Apps", "${matches.size}") } }
                 matches.forEachIndexed { i, (app, _, range) ->
                     item(key = app.key) {
                         var menu by remember { mutableStateOf(false) }
-                        Box {
+                        val (track, source) = rememberLaunchSource()
+                        Box(Modifier.animateItem()) {
                             ResultRow(apps, app, highlight(app.label, range), selected = i == 0 && calc == null,
                                 trailing = if (i == 0 && calc == null) "↵ Open" else "App",
-                                modifier = Modifier.combinedClickable(onLongClick = { menu = true }) { apps.launch(app); onDone() })
-                            AppMenu(apps, app, menu) { menu = false }
+                                modifier = track.combinedClickable(onLongClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress); menu = true
+                                }) { apps.launch(app, source()) })
+                            if (menu) AppPopup(apps, app) { menu = false }
                         }
                     }
                 }
             }
             if (shortcuts.isNotEmpty()) {
-                item(key = "sc") { Section("Shortcuts") }
+                item(key = "sc") { Box(Modifier.animateItem()) { Section("Shortcuts") } }
                 items(shortcuts, key = { "s" + it.info.id + it.app.key }) { s ->
-                    ResultRow(apps, s.app, AnnotatedString(s.label), false, s.app.label, Modifier.clickable { apps.launch(s); onDone() })
+                    val (track, source) = rememberLaunchSource()
+                    Box(Modifier.animateItem()) {
+                        ResultRow(apps, s.app, AnnotatedString(s.label), false, s.app.label, track.clickable { apps.launch(s, source()) })
+                    }
                 }
             }
             if ((calc != null || query.isBlank()) && apps.history.isNotEmpty()) {
-                item(key = "hist") { Section("History") }
+                item(key = "hist") { Box(Modifier.animateItem()) { Section("History") } }
                 items(apps.history.take(6), key = { "h" + it.first }) { (e, r) ->
-                    Row(Modifier.fillMaxWidth().clickable { onQuery(e) }.padding(horizontal = 10.dp, vertical = 5.dp)) {
+                    Row(Modifier.animateItem().fillMaxWidth().clickable { onQuery(e) }.padding(horizontal = 10.dp, vertical = 5.dp)) {
                         Text(e, color = Color(0xFF9AA3AB), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         Text(r, color = Fg, fontSize = 12.sp, fontFamily = Mono, modifier = Modifier.padding(start = 8.dp))
                     }
@@ -380,8 +581,13 @@ private fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit, o
             if (query.isBlank()) {
                 val freq = apps.frequent(5)
                 if (freq.isNotEmpty()) {
-                    item(key = "freq") { Section("Frequent") }
-                    items(freq, key = { "q" + it.key }) { app -> ResultRow(apps, app, AnnotatedString(app.label), false, "App", Modifier.clickable { apps.launch(app); onDone() }) }
+                    item(key = "freq") { Box(Modifier.animateItem()) { Section("Frequent") } }
+                    items(freq, key = { "q" + it.key }) { app ->
+                        val (track, source) = rememberLaunchSource()
+                        Box(Modifier.animateItem()) {
+                            ResultRow(apps, app, AnnotatedString(app.label), false, "App", track.clickable { apps.launch(app, source()) })
+                        }
+                    }
                 }
             }
         }

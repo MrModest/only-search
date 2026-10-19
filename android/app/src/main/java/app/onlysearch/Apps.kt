@@ -1,5 +1,6 @@
 package app.onlysearch
 
+import android.app.ActivityOptions
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -7,13 +8,16 @@ import android.content.pm.LauncherApps
 import android.content.pm.ShortcutInfo
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Rect
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
+import android.os.Bundle
 import android.os.Process
 import android.os.UserHandle
 import android.os.UserManager
 import android.provider.Settings
+import android.view.View
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +29,12 @@ import kotlinx.coroutines.withContext
 
 data class App(val label: String, val component: ComponentName, val user: UserHandle) {
     val key = "${component.flattenToString()}#${user.hashCode()}"
+}
+
+/** Where a launch starts on screen, so the app window zooms out of that icon. */
+class LaunchSource(private val view: View, val bounds: Rect) {
+    fun options(): Bundle =
+        ActivityOptions.makeScaleUpAnimation(view, bounds.left, bounds.top, bounds.width(), bounds.height()).toBundle()
 }
 
 data class Shortcut(val label: String, val app: App, val info: ShortcutInfo)
@@ -65,10 +75,14 @@ class Apps(private val context: Context) {
 
     fun frequent(n: Int) = all.filter { (counts[it.key] ?: 0) > 0 }.sortedByDescending { counts[it.key] }.take(n)
 
-    fun launch(app: App) {
+    /** True between launching an app and coming back home; drives the return animation. */
+    var returningFromApp = false
+
+    fun launch(app: App, from: LaunchSource? = null) {
         counts[app.key] = (counts[app.key] ?: 0) + 1
         prefs.edit { putInt("count:${app.key}", counts[app.key]!!) }
-        launcher.startMainActivity(app.component, app.user, null, null)
+        returningFromApp = true
+        launcher.startMainActivity(app.component, app.user, from?.bounds, from?.options())
     }
 
     fun toggle(list: MutableList<String>, name: String, app: App, max: Int) {
@@ -94,7 +108,15 @@ class Apps(private val context: Context) {
             .map { Shortcut((it.shortLabel ?: it.longLabel ?: "").toString(), app, it) }
     }
 
-    fun launch(s: Shortcut) = launcher.startShortcut(s.info, null, null)
+    fun launch(s: Shortcut, from: LaunchSource? = null) {
+        returningFromApp = true
+        launcher.startShortcut(s.info, from?.bounds, from?.options())
+    }
+
+    fun shortcutIcon(s: Shortcut): ImageBitmap? = runCatching {
+        val size = (40 * context.resources.displayMetrics.density).toInt()
+        squareIcon(launcher.getShortcutIconDrawable(s.info, context.resources.displayMetrics.densityDpi)!!, size)
+    }.getOrNull()
 
     fun appInfo(app: App) = launcher.startAppDetailsActivity(app.component, app.user, null, null)
 

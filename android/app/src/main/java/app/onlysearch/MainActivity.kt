@@ -16,7 +16,9 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     private lateinit var apps: Apps
     private lateinit var widgets: Widgets
-    private val resetTick = mutableIntStateOf(0)
+    private val homeTick = mutableIntStateOf(0)
+    private val stopTick = mutableIntStateOf(0)
+    private val resumeTick = mutableIntStateOf(0)
 
     private val packageCallback = object : LauncherApps.Callback() {
         private fun reload() { lifecycleScope.launch { apps.load() } }
@@ -39,18 +41,19 @@ class MainActivity : ComponentActivity() {
         val query = intent.getStringExtra("query")
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                Launcher(apps, widgets, resetTick.intValue, query)
+                Launcher(apps, widgets, homeTick.intValue, stopTick.intValue, resumeTick.intValue, query)
             }
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.hasCategory(Intent.CATEGORY_HOME)) resetTick.intValue++
+        if (intent.hasCategory(Intent.CATEGORY_HOME)) homeTick.intValue++
     }
 
     override fun onStart() { super.onStart(); widgets.host.startListening() }
-    override fun onStop() { super.onStop(); runCatching { widgets.host.stopListening() } }
+    override fun onStop() { super.onStop(); runCatching { widgets.host.stopListening() }; stopTick.intValue++ }
+    override fun onResume() { super.onResume(); resumeTick.intValue++ }
 
     override fun onDestroy() {
         getSystemService(LauncherApps::class.java).unregisterCallback(packageCallback)
