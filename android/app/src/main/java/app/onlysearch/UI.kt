@@ -94,7 +94,7 @@ fun Launcher(apps: Apps, widgets: Widgets, resetTick: Int, initialQuery: String?
     Box(Modifier.fillMaxSize()) {
         when (screen) {
             Screen.Home -> HomeScreen(apps, widgets, onSearch = { screen = Screen.Search }, onDrawer = { screen = Screen.Drawer }, onPickWidget = { picking = true })
-            Screen.Drawer -> DrawerScreen(apps, onClose = home)
+            Screen.Drawer -> DrawerScreen(apps, onClose = home, onSearch = { query = it; screen = Screen.Search })
             Screen.Search -> SearchScreen(apps, query, { query = it }, onDone = home)
         }
         if (picking) WidgetPicker(widgets) { picking = false }
@@ -243,13 +243,11 @@ private fun AppMenu(apps: Apps, app: App, expanded: Boolean, onDismiss: () -> Un
 // ---------- Drawer ----------
 
 @Composable
-private fun DrawerScreen(apps: Apps, onClose: () -> Unit) {
-    var filter by remember { mutableStateOf("") }
+private fun DrawerScreen(apps: Apps, onClose: () -> Unit, onSearch: (String) -> Unit) {
     val grid = rememberLazyGridState()
     val scope = rememberCoroutineScope()
-    val list = apps.all.filter { filter.isBlank() || match(it.label, filter) != null }
-    val frequent = if (filter.isBlank()) apps.frequent(5) else emptyList()
-    val sections = list.groupBy { it.label.firstOrNull()?.uppercaseChar()?.takeIf(Char::isLetter) ?: '#' }.toSortedMap()
+    val frequent = apps.frequent(5)
+    val sections = apps.all.groupBy { it.label.firstOrNull()?.uppercaseChar()?.takeIf(Char::isLetter) ?: '#' }.toSortedMap()
     // Grid index of each section header, for the letter scrubber.
     val headerIndex = remember(sections, frequent) {
         var i = if (frequent.isEmpty()) 0 else 1 + frequent.size
@@ -294,9 +292,8 @@ private fun DrawerScreen(apps: Apps, onClose: () -> Unit) {
         Spacer(Modifier.height(6.dp))
         Bar {
             Text("⌕", color = Muted, fontSize = 15.sp)
-            Field(filter, { filter = it }, "Filter ${apps.all.size} apps", Modifier.weight(1f), autoFocus = false) {
-                list.firstOrNull()?.let { apps.launch(it); onClose() }
-            }
+            // Same search as home: the first keystroke hands over to the search screen (apps + calculator).
+            Field("", { if (it.isNotEmpty()) onSearch(it) }, "Search apps, math, dates", Modifier.weight(1f), autoFocus = false) {}
         }
         Spacer(Modifier.height(6.dp))
     }
