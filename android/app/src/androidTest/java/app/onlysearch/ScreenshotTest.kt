@@ -62,6 +62,8 @@ class ScreenshotTest {
         val keys = context.getSystemService(LauncherApps::class.java).getActivityList(null, user)
             .associate { it.label.toString() to "${it.componentName.flattenToString()}#${user.hashCode()}" }
         context.getSharedPreferences("launcher", Context.MODE_PRIVATE).edit().clear()
+            .putString("dock", listOf("Phone", "Messages", "Chrome", "Camera").mapNotNull(keys::get).joinToString("\n"))
+            .putBoolean("seeded", true)
             .putString("home", listOf("Calendar", "Maps", "Photos", "Gmail", "Clock", "Drive", "Files", "Contacts").mapNotNull(keys::get).joinToString("\n"))
             .apply { listOf("Chrome" to 12, "Messages" to 9, "Maps" to 7, "Camera" to 5, "Gmail" to 4).forEach { (l, n) -> keys[l]?.let { putInt("count:$it", n) } } }
             .putString("history", listOf(
@@ -77,8 +79,8 @@ class ScreenshotTest {
         seed()
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         scenario.onActivity { a ->
-            a.widgets.providers().firstOrNull { it.provider.packageName.contains("deskclock") && it.configure == null }
-                ?.let { a.widgets.add(it) }
+            val usable = a.widgets.providers().filter { it.configure == null }
+            (usable.firstOrNull { it.provider.packageName.contains("deskclock") } ?: usable.firstOrNull())?.let { a.widgets.add(it) }
         }
         compose.waitUntil(30_000) { compose.onAllNodes(homeIcon("Calendar")).fetchSemanticsNodes().isNotEmpty() }
         shot("01-home", 2500)
@@ -108,7 +110,11 @@ class ScreenshotTest {
 
         // Search: empty state (frequent + history), app matches, then the calculator from simple maths
         // up to time-zone conversion. Numbered so the files sort in that order.
-        compose.onNodeWithTag("homeSearch").performClick()
+        compose.waitUntil(20_000) {
+            if (compose.onAllNodes(hasTestTag("searchField")).fetchSemanticsNodes().isEmpty()) {
+                runCatching { compose.onNodeWithTag("homeSearch").performClick() }; false
+            } else true
+        }
         shot("10-search-empty", 1500)
         // App search: prefix, several matches, fuzzy letters, and an app with its shortcuts listed.
         listOf("ca" to "prefix-ca", "ma" to "matches-ma", "gml" to "fuzzy-gml", "phts" to "fuzzy-phts", "chrome" to "shortcuts-chrome", "set" to "settings")
