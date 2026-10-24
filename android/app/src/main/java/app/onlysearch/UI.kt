@@ -20,7 +20,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -128,40 +130,40 @@ import kotlin.math.roundToInt
 
 // Mock-up 2026-10-24 (docs/Mock-up 2026-10-24.html): soft dark tiles and cards, sky-blue accent, Inter + JetBrains Mono.
 // Motion follows Nova Launcher: finger-tracked drawer, icon zoom launches, press scale, popup shortcuts.
-private val Sheet = Color(0xFF0E0F12)
-private val Tile = Color(0xFF1E2025)
-private val TileLine = Color(0xFF30333A)
-private val FieldBg = Color(0xFF1A1C21)
-private val Card = Color(0xFF16181C)
-private val CardLine = Color(0xFF26292F)
-private val Divider = Color(0xFF23262C)
-private val PillLine = Color(0xFF34373E)
-private val ChipLine = Color(0xFF2E3138)
-private val Accent = Color(0xFF7CC4FA)
-private val OnAccent = Color(0xFF06121C)
-private val AccentCard = Color(0xFF121B24)
-private val AccentLine = Color(0xFF24405A)
-private val Fg = Color(0xFFEDEAE4)
-private val Muted = Color(0xFFA6A29A)
-private val Dim = Color(0xFF8C887F)
-private val Danger = Color(0xFFFF8A7A)
-private val Scrim = Color(0xF2111216)
-private val PopupBg = Color(0xFF1C1E23)
-private val TextShadow = Shadow(Color(0x66000000), Offset(0f, 1f), 3f)
-private val Settle = spring<Float>(dampingRatio = 0.9f, stiffness = 420f)
+internal val Sheet = Color(0xFF0E0F12)
+internal val Tile = Color(0xFF1E2025)
+internal val TileLine = Color(0xFF30333A)
+internal val FieldBg = Color(0xFF1A1C21)
+internal val Card = Color(0xFF16181C)
+internal val CardLine = Color(0xFF26292F)
+internal val Divider = Color(0xFF23262C)
+internal val PillLine = Color(0xFF34373E)
+internal val ChipLine = Color(0xFF2E3138)
+internal val Accent = Color(0xFF7CC4FA)
+internal val OnAccent = Color(0xFF06121C)
+internal val AccentCard = Color(0xFF121B24)
+internal val AccentLine = Color(0xFF24405A)
+internal val Fg = Color(0xFFEDEAE4)
+internal val Muted = Color(0xFFA6A29A)
+internal val Dim = Color(0xFF8C887F)
+internal val Danger = Color(0xFFFF8A7A)
+internal val Scrim = Color(0xF2111216)
+internal val PopupBg = Color(0xFF1C1E23)
+internal val TextShadow = Shadow(Color(0x66000000), Offset(0f, 1f), 3f)
+internal val Settle = spring<Float>(dampingRatio = 0.9f, stiffness = 420f)
 
-private fun family(res: Int, vararg weights: Int) =
+internal fun family(res: Int, vararg weights: Int) =
     FontFamily(weights.map { Font(res, FontWeight(it), variationSettings = FontVariation.Settings(FontVariation.weight(it))) })
-private val Inter = family(R.font.inter, 300, 400, 500, 600, 700)
-private val Mono = family(R.font.jetbrains_mono, 400, 500, 700)
+internal val Inter = family(R.font.inter, 300, 400, 500, 600, 700)
+internal val Mono = family(R.font.jetbrains_mono, 400, 500, 700)
 
 /** Stroked 24×24 line icon from SVG path data, the way the mock-up draws them. */
-private fun line(d: String, width: Float = 1.7f) = ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
+internal fun line(d: String, width: Float = 1.7f) = ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
     .addPath(PathParser().parsePathString(d).toNodes(), fill = null, stroke = SolidColor(Color.White), strokeLineWidth = width,
         strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round)
     .build()
 
-private object Ic {
+internal object Ic {
     val search = line("M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14z M20 20l-4-4", 2f)
     val mic = line("M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z M5.5 11a6.5 6.5 0 0 0 13 0 M12 17.5V21")
     val close = line("M6 6l12 12 M18 6L6 18", 1.8f)
@@ -175,11 +177,11 @@ private object Ic {
 }
 
 @Composable
-private fun Label(text: String, modifier: Modifier = Modifier, color: Color = Muted) =
+internal fun Label(text: String, modifier: Modifier = Modifier, color: Color = Muted) =
     Text(text.uppercase(), modifier, color = color, fontSize = 11.sp, fontFamily = Mono, letterSpacing = 0.14.em, maxLines = 1)
 
 @Composable
-private fun shadowed() = LocalTextStyle.current.copy(shadow = TextShadow)
+internal fun shadowed() = LocalTextStyle.current.copy(shadow = TextShadow)
 
 @Composable
 fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeTick: Int, initialQuery: String?) {
@@ -192,6 +194,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     var searching by remember { mutableStateOf(initialQuery != null) }
     var query by remember { mutableStateOf(initialQuery.orEmpty()) }
     var picking by remember { mutableStateOf(false) }
+    var settings by remember { mutableStateOf<String?>(null) }
     val searchProgress by animateFloatAsState(if (searching) 1f else 0f, tween(180), label = "search")
 
     var drawerBlur by remember { mutableStateOf(false) }
@@ -205,7 +208,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     fun closeSearch() { searching = false; query = "" }
 
     // Home button: animate back. Leaving to an app: reset silently so the launch animation isn't disturbed.
-    LaunchedEffect(homeTick) { if (homeTick > 0) { closeSearch(); picking = false; settleDrawer(false) } }
+    LaunchedEffect(homeTick) { if (homeTick > 0) { closeSearch(); picking = false; settings = null; settleDrawer(false) } }
     LaunchedEffect(stopTick) { if (stopTick > 0) { closeSearch(); picking = false; drawerBlur = false; drawer.snapTo(0f) } }
     LaunchedEffect(resumeTick) {
         if (apps.returningFromApp) {
@@ -255,6 +258,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             onDrag = { dragDrawer(it) },
             onDragEnd = { v -> settleDrawer(v < -600f || (v < 600f && drawer.value > 0.3f)) },
             onPickWidget = { picking = true },
+            onSettings = { settings = it },
         )
     }
 
@@ -286,18 +290,26 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
                 SearchScreen(apps, query) { query = it }
             }
             if (picking) WidgetPicker(apps, widgets) { picking = false }
+            AnimatedVisibility(
+                settings != null,
+                enter = fadeIn(tween(160)) + slideInHorizontally(tween(220)) { it / 8 },
+                exit = fadeOut(tween(120)) + slideOutHorizontally(tween(160)) { it / 8 },
+            ) {
+                SettingsScreen(apps, settings ?: "hub") { settings = null }
+            }
         }
     }
 }
 
 // ---------- Home ----------
 
-private class HomeActions(
+internal class HomeActions(
     val onSearch: () -> Unit, val onVoice: (String) -> Unit, val onDrag: (Float) -> Unit, val onDragEnd: (Float) -> Unit, val onPickWidget: () -> Unit,
+    val onSettings: (String) -> Unit,
 )
 
 @Composable
-private fun HomeScreen(apps: Apps, widgets: Widgets, actions: HomeActions) {
+internal fun HomeScreen(apps: Apps, widgets: Widgets, actions: HomeActions) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
@@ -326,7 +338,7 @@ private fun HomeScreen(apps: Apps, widgets: Widgets, actions: HomeActions) {
                 menu = false
                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Wallpaper"))
             })
-            DropdownMenuItem({ Text("Default home app") }, { menu = false; apps.homeSettings() })
+            DropdownMenuItem({ Text("Settings") }, { menu = false; actions.onSettings("hub") })
         }
         DropdownMenu(removing, { removing = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
             widgets.ids.toList().forEach { id ->
@@ -338,7 +350,7 @@ private fun HomeScreen(apps: Apps, widgets: Widgets, actions: HomeActions) {
 }
 
 @Composable
-private fun Clock() {
+internal fun Clock() {
     val context = LocalContext.current
     val now by produceState(Date()) { while (true) { value = Date(); delay(60_000 - System.currentTimeMillis() % 60_000) } }
     Column(Modifier.padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -351,7 +363,7 @@ private fun Clock() {
 }
 
 @Composable
-private fun WidgetView(widgets: Widgets, id: Int) {
+internal fun WidgetView(widgets: Widgets, id: Int) {
     val info = remember(id) { widgets.manager.getAppWidgetInfo(id) } ?: return
     val density = LocalContext.current.resources.displayMetrics.density
     val height = maxOf(info.minHeight / density, 64f).dp
@@ -363,7 +375,7 @@ private fun WidgetView(widgets: Widgets, id: Int) {
 
 /** Speech goes straight into the search field, so "65 kg in pounds" can be spoken. */
 @Composable
-private fun MicButton(onText: (String) -> Unit) {
+internal fun MicButton(onText: (String) -> Unit) {
     val context = LocalContext.current
     val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let(onText)
@@ -378,7 +390,7 @@ private fun MicButton(onText: (String) -> Unit) {
 }
 
 @Composable
-private fun WidgetPicker(apps: Apps, widgets: Widgets, onClose: () -> Unit) {
+internal fun WidgetPicker(apps: Apps, widgets: Widgets, onClose: () -> Unit) {
     val context = LocalContext.current
     val pm = context.packageManager
     val density = context.resources.displayMetrics.density
@@ -446,14 +458,14 @@ private fun WidgetPicker(apps: Apps, widgets: Widgets, onClose: () -> Unit) {
 }
 
 /** Width × height in launcher cells (~70dp each); Android 12+ widgets state their own size. */
-private fun cells(p: AppWidgetProviderInfo, density: Float): Pair<Int, Int> {
+internal fun cells(p: AppWidgetProviderInfo, density: Float): Pair<Int, Int> {
     fun of(px: Int) = ((px / density + 30) / 70).toInt().coerceAtLeast(1)
     return if (Build.VERSION.SDK_INT >= 31 && p.targetCellWidth > 0) p.targetCellWidth to p.targetCellHeight.coerceAtLeast(1)
     else of(p.minWidth) to of(p.minHeight)
 }
 
 @Composable
-private fun WidgetPreview(p: AppWidgetProviderInfo, modifier: Modifier, onClick: () -> Unit) {
+internal fun WidgetPreview(p: AppWidgetProviderInfo, modifier: Modifier, onClick: () -> Unit) {
     val context = LocalContext.current
     val density = context.resources.displayMetrics
     val preview = remember(p) {
@@ -480,14 +492,14 @@ private fun WidgetPreview(p: AppWidgetProviderInfo, modifier: Modifier, onClick:
 
 /** Tracks a composable's on-screen bounds so a launch can zoom out of it. */
 @Composable
-private fun rememberLaunchSource(): Pair<Modifier, () -> LaunchSource> {
+internal fun rememberLaunchSource(): Pair<Modifier, () -> LaunchSource> {
     val view = LocalView.current
     var bounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     return Modifier.onGloballyPositioned { bounds = it.boundsInWindow() } to { LaunchSource(view, bounds.toAndroidRect()) }
 }
 
 @Composable
-private fun AppGrid(apps: Apps, list: List<App>, size: Dp, labelColor: Color? = Fg, columns: Int = 4, rowGap: Dp = 22.dp) {
+internal fun AppGrid(apps: Apps, list: List<App>, size: Dp, labelColor: Color? = Fg, columns: Int = 4, rowGap: Dp = 22.dp) {
     if (list.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(rowGap)) {
         list.chunked(columns).forEach { row ->
@@ -500,7 +512,7 @@ private fun AppGrid(apps: Apps, list: List<App>, size: Dp, labelColor: Color? = 
 }
 
 @Composable
-private fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifier: Modifier = Modifier) {
+internal fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
@@ -525,7 +537,7 @@ private fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifier
 
 /** Soft-square icon (corner = a third of the side); [ring] marks the long-pressed one. */
 @Composable
-private fun AppIcon(apps: Apps, app: App, size: Dp, modifier: Modifier = Modifier, ring: Boolean = false) {
+internal fun AppIcon(apps: Apps, app: App, size: Dp, modifier: Modifier = Modifier, ring: Boolean = false) {
     val bmp = apps.icons[app.key]
     val shape = RoundedCornerShape(size / 3)
     val m = modifier.size(size).then(if (ring) Modifier.border(2.dp, Accent, shape) else Modifier).clip(shape)
@@ -533,7 +545,7 @@ private fun AppIcon(apps: Apps, app: App, size: Dp, modifier: Modifier = Modifie
 }
 
 /** Places the popup above its anchor (below if there's no room), horizontally centred and kept on screen. */
-private object AboveAnchor : PopupPositionProvider {
+internal object AboveAnchor : PopupPositionProvider {
     override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
         val x = (anchorBounds.center.x - popupContentSize.width / 2).coerceIn(0, max(0, windowSize.width - popupContentSize.width))
         val above = anchorBounds.top - popupContentSize.height
@@ -543,7 +555,7 @@ private object AboveAnchor : PopupPositionProvider {
 
 /** Long-press card: the app's shortcuts, then a row of quick actions. Scales in from the icon. */
 @Composable
-private fun AppPopup(apps: Apps, app: App, onDismiss: () -> Unit) {
+internal fun AppPopup(apps: Apps, app: App, onDismiss: () -> Unit) {
     val shortcuts = remember(app) { apps.shortcuts(app).take(4).map { it to apps.shortcutIcon(it) } }
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)) }
@@ -586,7 +598,7 @@ private fun AppPopup(apps: Apps, app: App, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun RowScope.PopupAction(icon: ImageVector, label: String, color: Color, onClick: () -> Unit) {
+internal fun RowScope.PopupAction(icon: ImageVector, label: String, color: Color, onClick: () -> Unit) {
     Column(Modifier.weight(1f).height(62.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)) {
         Icon(icon, label, tint = color, modifier = Modifier.size(20.dp))
@@ -597,12 +609,12 @@ private fun RowScope.PopupAction(icon: ImageVector, label: String, color: Color,
 // ---------- Drawer ----------
 
 @Composable
-private fun Handle(modifier: Modifier = Modifier) = Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+internal fun Handle(modifier: Modifier = Modifier) = Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
     Box(Modifier.size(36.dp, 4.dp).clip(CircleShape).background(Color(0xFF3A3D45)))
 }
 
 @Composable
-private fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: () -> Unit) {
+internal fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: () -> Unit) {
     val grid = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     val frequent = apps.frequent(4)
@@ -675,12 +687,12 @@ private fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: (
 
 // ---------- Search + calculator ----------
 
-private data class Calc(val expression: String, val result: String, val micros: Long)
+internal data class Calc(val expression: String, val result: String, val micros: Long)
 
-private val Examples = listOf("20% of 450", "5 km in mi", "time in Tokyo", "\$48 + 15% tip", "3:45pm + 4h 10m", "sqrt(2)^8")
+internal val Examples = listOf("20% of 450", "5 km in mi", "time in Tokyo", "\$48 + 15% tip", "3:45pm + 4h 10m", "sqrt(2)^8")
 
 @Composable
-private fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit) {
+internal fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     var calc by remember { mutableStateOf<Calc?>(null) }
@@ -805,7 +817,7 @@ private fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit) {
 }
 
 @Composable
-private fun TopHit(apps: Apps, app: App, range: IntRange?, shortcuts: List<Shortcut>) {
+internal fun TopHit(apps: Apps, app: App, range: IntRange?, shortcuts: List<Shortcut>) {
     var menu by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     val (track, source) = rememberLaunchSource()
@@ -835,7 +847,7 @@ private fun TopHit(apps: Apps, app: App, range: IntRange?, shortcuts: List<Short
 }
 
 @Composable
-private fun Chip(text: String, bg: Color, border: Color, font: FontFamily, size: Int, onClick: () -> Unit) {
+internal fun Chip(text: String, bg: Color, border: Color, font: FontFamily, size: Int, onClick: () -> Unit) {
     Box(Modifier.height(34.dp).clip(CircleShape).background(bg).border(1.dp, border, CircleShape).clickable(onClick = onClick).padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center) {
         Text(text, fontSize = size.sp, fontFamily = font, maxLines = 1)
@@ -843,7 +855,7 @@ private fun Chip(text: String, bg: Color, border: Color, font: FontFamily, size:
 }
 
 @Composable
-private fun CalcCard(c: Calc, onCopy: () -> Unit) {
+internal fun CalcCard(c: Calc, onCopy: () -> Unit) {
     val shape = RoundedCornerShape(20.dp)
     Column(
         Modifier.testTag("calcCard").fillMaxWidth().clip(shape).background(AccentCard).border(1.dp, AccentLine, shape)
@@ -858,7 +870,7 @@ private fun CalcCard(c: Calc, onCopy: () -> Unit) {
     }
 }
 
-private fun highlight(label: String, range: IntRange?) = buildAnnotatedString {
+internal fun highlight(label: String, range: IntRange?) = buildAnnotatedString {
     append(label)
     if (range != null && range.last < label.length) addStyle(SpanStyle(color = Accent), range.first, range.last + 1)
 }
@@ -867,7 +879,7 @@ private fun highlight(label: String, range: IntRange?) = buildAnnotatedString {
 
 /** The round search pill on home and in the drawer; tapping it opens search. */
 @Composable
-private fun Pill(hint: String, modifier: Modifier = Modifier, height: Dp = 56.dp, onClick: () -> Unit, trailing: @Composable () -> Unit = {}) {
+internal fun Pill(hint: String, modifier: Modifier = Modifier, height: Dp = 56.dp, onClick: () -> Unit, trailing: @Composable () -> Unit = {}) {
     Row(
         modifier.fillMaxWidth().height(height).clip(CircleShape).background(Tile).border(1.dp, PillLine, CircleShape)
             .clickable(onClick = onClick).padding(start = 18.dp, end = 8.dp),
@@ -881,7 +893,7 @@ private fun Pill(hint: String, modifier: Modifier = Modifier, height: Dp = 56.dp
 }
 
 @Composable
-private fun Field(value: String, onValue: (String) -> Unit, hint: String, modifier: Modifier, autoFocus: Boolean, fontSize: Int = 16, onGo: () -> Unit) {
+internal fun Field(value: String, onValue: (String) -> Unit, hint: String, modifier: Modifier, autoFocus: Boolean, fontSize: Int = 16, onGo: () -> Unit) {
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     if (autoFocus) LaunchedEffect(Unit) { focus.requestFocus(); keyboard?.show() }

@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Light status/nav icons always: every screen is dark, whatever the system theme.
         enableEdgeToEdge(SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT))
+        prefs = Prefs(this)
         apps = Apps(this)
         widgets = Widgets(this)
         lifecycleScope.launch { apps.load() }
