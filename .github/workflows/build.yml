@@ -88,7 +88,7 @@ jobs:
       matrix:
         include:
           - { api: "34", target: google_apis, required: true }
-          - { api: "37.2", target: google_apis_ps16k, required: false } # Android 17, 16 KB pages; flaky on CI
+          # Android 17 (37.2, google_apis_ps16k) never finished booting on GitHub runners; re-add when it does.
     continue-on-error: ${{ !matrix.required }}
     steps:
       - uses: actions/download-artifact@v4
