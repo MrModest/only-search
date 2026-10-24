@@ -152,6 +152,8 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.Date
@@ -208,6 +210,10 @@ internal object Ic {
     val edit = line("M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4")
     val hide = line("M3 3l18 18 M10.6 5.1A10 10 0 0 1 12 5c5 0 9 4.5 10 7-0.4 1-1.2 2.3-2.4 3.5 M6.6 6.6C4.6 8 3.3 10 2 12c1 2.5 5 7 10 7 1.8 0 3.4-.5 4.8-1.3 M9.9 9.9a3 3 0 0 0 4.2 4.2")
     val grip = line("M5 9h14 M5 15h14", 1.8f)
+    val monitor = line("M3 5h18v11H3z M8 20h8 M12 16v4")
+    val phone = line("M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z")
+    val message = line("M12 20a8 8 0 1 0-7-4l-1 4 4-1a8 8 0 0 0 4 1z")
+    val globe = line("M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M3 12h18 M12 3a14 14 0 0 1 0 18 M12 3a14 14 0 0 0 0 18")
 }
 
 @Composable
@@ -367,7 +373,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
                 enter = fadeIn(tween(160)) + slideInVertically(tween(220)) { it / 12 },
                 exit = fadeOut(tween(120)) + slideOutVertically(tween(160)) { it / 12 },
             ) {
-                SearchScreen(apps, query) { query = it }
+                SearchScreen(apps, query, onSettings = { settings = it }) { query = it }
             }
             AnimatedVisibility(editing, enter = fadeIn(tween(160)) + scaleIn(tween(220), 1.06f), exit = fadeOut(tween(140)) + scaleOut(tween(180), 1.06f)) {
                 EditHome(apps, widgets, onDone = { page -> editing = false; scope.launch { pager.scrollToPage(page) } },
@@ -1205,7 +1211,7 @@ internal data class Calc(val expression: String, val result: String, val micros:
 internal val Examples = listOf("20% of 450", "5 km in mi", "time in Tokyo", "\$48 + 15% tip", "3:45pm + 4h 10m", "sqrt(2)^8")
 
 @Composable
-internal fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit) {
+internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Unit, onQuery: (String) -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     var calc by remember { mutableStateOf<Calc?>(null) }
@@ -1221,7 +1227,8 @@ internal fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit) 
     }
     val (matches, matchMicros) = remember(query, apps.all.toList(), apps.hidden.size) {
         val t0 = System.nanoTime()
-        apps.visible.mapNotNull { a -> match(a.label, query)?.let { Triple(a, it.first, it.second) } }
+        // Frequently opened apps get up to +10 on the match score, enough to win a tie, not to beat a better match.
+        apps.visible.mapNotNull { a -> match(a.label, query, prefs.fuzzy)?.let { Triple(a, it.first + if (prefs.boostFrequent) minOf(apps.count(a), 10) else 0, it.second) } }
             .sortedWith(compareByDescending<Triple<App, Int, IntRange?>> { it.second }.thenBy { it.first.label.length })
             .take(9) to (System.nanoTime() - t0) / 1000
     }
@@ -1242,6 +1249,27 @@ internal fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit) 
         }
     }
     val recent = (apps.recent.mapNotNull(apps::byKey).ifEmpty { apps.frequent(5) }).take(5)
+    val settingsHits = remember(query, prefs.srcSettings, prefs.fuzzy) { if (prefs.srcSettings) searchSettings(query, prefs.fuzzy) else emptyList() }
+    var contactsOk by remember { mutableStateOf(hasContacts(context)) }
+    val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        contactsOk = ok
+        if (!ok) {
+            prefs.srcContacts = false
+            Toast.makeText(context, "People results are off. Turn them on in Settings › Sources & ranking", Toast.LENGTH_LONG).show()
+        }
+    }
+    var people by remember { mutableStateOf(emptyList<Person>()) }
+    LaunchedEffect(query, contactsOk, prefs.srcContacts) {
+        people = if (!contactsOk || !prefs.srcContacts || query.trim().length < 2) emptyList()
+        else { delay(60); withContext(Dispatchers.IO) { searchContacts(context, query) } }
+    }
+    val wantsPeople = prefs.srcContacts && !contactsOk && query.trim().length >= 2 && query.any(Char::isLetter)
+    val openSetting = { e: SettingsEntry ->
+        if (e.page != null) onSettings(e.page)
+        else runCatching { context.startActivity(Intent(e.action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { context.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        Unit
+    }
 
     Column(Modifier.fillMaxSize().background(Sheet).systemBarsPadding().imePadding()) {
         // Reversed so results stack up from the search bar, the best one closest to the thumb.
@@ -1300,12 +1328,47 @@ internal fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit) 
                         AppGrid(apps, rest, size = 52.dp, rowGap = 12.dp)
                     }
                 }
+                if (people.isNotEmpty() || wantsPeople) item(key = "people") {
+                    Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Label("People", Modifier.padding(horizontal = 4.dp))
+                        ResultCard {
+                            if (wantsPeople) ContactsPrompt(onAllow = { askContacts.launch(android.Manifest.permission.READ_CONTACTS) }, onOff = { prefs.srcContacts = false })
+                            people.forEachIndexed { i, p -> if (i > 0) RowDivider(); PersonRow(p, query) }
+                        }
+                    }
+                }
+                if (settingsHits.isNotEmpty()) item(key = "settings") {
+                    Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Label("Settings", Modifier.padding(horizontal = 4.dp))
+                        ResultCard {
+                            settingsHits.forEachIndexed { i, (e, range) ->
+                                if (i > 0) RowDivider()
+                                Row(Modifier.fillMaxWidth().height(50.dp).clickable { openSetting(e) }.padding(horizontal = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Icon(if (e.page != null) SIc.sources else Ic.monitor, null, tint = Muted, modifier = Modifier.size(18.dp))
+                                    Text(highlight(e.label, range), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                    Text(e.where, color = Muted, fontSize = 13.sp, maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                }
+                if (prefs.srcWeb) item(key = "web") {
+                    Row(Modifier.animateItem().fillMaxWidth().height(46.dp).clip(RoundedCornerShape(16.dp)).border(1.dp, CardLine, RoundedCornerShape(16.dp))
+                        .clickable {
+                            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(webSearchUrl(query))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        }.padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Ic.globe, null, tint = Muted, modifier = Modifier.size(18.dp))
+                        Text("Search ${prefs.engine} for “${query.trim()}”", color = Muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
         }
         val (left, right) = when {
             query.isBlank() -> "↵ open top hit" to "long-press for actions"
             c != null -> "↵ copy answer" to "long-press app for actions"
-            top != null -> "↵ open ${top.first.label}" to "${matches.size} results · %.0f ms".format(matchMicros / 1000.0)
+            top != null -> "↵ open ${top.first.label}" to "${matches.size + people.size + settingsHits.size} results · %.0f ms".format(matchMicros / 1000.0)
             else -> "no matches" to ""
         }
         Row(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF22252A))) {}
@@ -1346,7 +1409,8 @@ internal fun TopHit(apps: Apps, app: App, range: IntRange?, shortcuts: List<Shor
                 AppIcon(apps, app, 52.dp, track)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(highlight(app.label, range), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("Top hit", color = Muted, fontSize = 12.sp)
+                    val last = apps.lastLaunch(app)
+                    Text(if (last > 0) "Top hit · opened ${ago(last)}" else "Top hit", color = Muted, fontSize = 12.sp)
                 }
                 Text("↵", color = Accent, fontSize = 11.sp, fontFamily = Mono, modifier = Modifier
                     .border(1.dp, Color(0xFF2C4E6C), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp))
@@ -1356,6 +1420,49 @@ internal fun TopHit(apps: Apps, app: App, range: IntRange?, shortcuts: List<Shor
             }
         }
         if (menu) AppPopup(apps, app, anchor(), hint = false) { menu = false }
+    }
+}
+
+@Composable
+private fun ResultCard(content: @Composable ColumnScope.() -> Unit) =
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Card).border(1.dp, CardLine, RoundedCornerShape(18.dp)), content = content)
+
+@Composable
+private fun RowDivider() = Box(Modifier.fillMaxWidth().height(1.dp).background(Divider))
+
+private val Avatars = listOf(Color(0xFF2E3A4A) to Color(0xFFB9D3F2), Color(0xFF3E3424) to Color(0xFFF2D7A8), Color(0xFF2F3E33) to Color(0xFFBFE3C6))
+
+@Composable
+private fun PersonRow(p: Person, query: String) {
+    val context = LocalContext.current
+    fun go(i: Intent) = runCatching { context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    Row(Modifier.fillMaxWidth().height(58.dp).clickable { openContact(context, p) }.padding(start = 12.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        val (bg, fg) = Avatars[(p.id % Avatars.size).toInt()]
+        Box(Modifier.size(36.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
+            if (p.photo != null) Image(p.photo, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            else Text(p.name.split(' ').filter { it.isNotEmpty() }.take(2).joinToString("") { it.take(1) }.uppercase(), color = fg, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(highlight(p.name, match(p.name, query)?.second), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(p.label, color = Muted, fontSize = 12.sp, maxLines = 1)
+        }
+        Box(Modifier.size(40.dp).clip(CircleShape).clickable { go(Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:${p.number}"))) }
+            .semantics { contentDescription = "Call ${p.name}" }, contentAlignment = Alignment.Center) { Icon(Ic.phone, null, tint = Fg, modifier = Modifier.size(18.dp)) }
+        Box(Modifier.size(40.dp).clip(CircleShape).clickable { go(Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("smsto:${p.number}"))) }
+            .semantics { contentDescription = "Message ${p.name}" }, contentAlignment = Alignment.Center) { Icon(Ic.message, null, tint = Fg, modifier = Modifier.size(18.dp)) }
+    }
+}
+
+/** Shown in place of People results until contacts access is granted; ✕ turns the source off instead. */
+@Composable
+private fun ContactsPrompt(onAllow: () -> Unit, onOff: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(start = 14.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Find people in your contacts", fontSize = 14.sp, color = Muted, modifier = Modifier.weight(1f))
+        Chip("Allow", Color(0xFF16232F), AccentLine, Inter, 13, onAllow)
+        Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onOff).semantics { contentDescription = "Turn off people results" },
+            contentAlignment = Alignment.Center) { Icon(Ic.close, null, tint = Dim, modifier = Modifier.size(16.dp)) }
     }
 }
 

@@ -105,6 +105,9 @@ class Apps(private val context: Context) {
         loaded.value = true
     }
 
+    fun count(app: App) = counts[app.key] ?: 0
+    fun lastLaunch(app: App) = sp.getLong("last:${app.key}", 0L)
+
     fun frequent(n: Int) = visible.filter { (counts[it.key] ?: 0) > 0 }.sortedByDescending { counts[it.key] }.take(n)
 
     /** True between launching an app and coming back home; drives the return animation. */
@@ -114,7 +117,7 @@ class Apps(private val context: Context) {
         counts[app.key] = (counts[app.key] ?: 0) + 1
         recent.remove(app.key); recent.add(0, app.key)
         while (recent.size > 5) recent.removeAt(recent.lastIndex)
-        sp.edit { putInt("count:${app.key}", counts[app.key]!!); putString("recent", recent.joinToString("\n")) }
+        sp.edit { putInt("count:${app.key}", counts[app.key]!!); putString("recent", recent.joinToString("\n")); putLong("last:${app.key}", System.currentTimeMillis()) }
         returningFromApp = true
         launcher.startMainActivity(app.component, app.user, from?.bounds, from?.options())
     }
@@ -404,7 +407,7 @@ fun squareIcon(d: Drawable, size: Int): ImageBitmap {
 }
 
 /** Score for fuzzy app matching; null = no match. Higher is better. Returns the matched range for highlighting. */
-fun match(label: String, query: String): Pair<Int, IntRange?>? {
+fun match(label: String, query: String, fuzzy: Boolean = true): Pair<Int, IntRange?>? {
     val l = label.lowercase(); val q = query.lowercase().trim()
     if (q.isEmpty()) return null
     if (l.startsWith(q)) return 100 to q.indices
@@ -412,6 +415,7 @@ fun match(label: String, query: String): Pair<Int, IntRange?>? {
     if (word != null) return 80 to word.range
     val i = l.indexOf(q)
     if (i >= 0) return 60 to (i until i + q.length)
+    if (!fuzzy) return null
     var j = 0
     for (ch in l) if (j < q.length && ch == q[j]) j++
     return if (j == q.length && q.length > 1) 30 to null else null

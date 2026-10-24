@@ -15,6 +15,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -71,6 +75,14 @@ class Prefs(context: Context) {
     var labels by P("set.labels", true)
     var lockLayout by P("set.lockLayout", false)
 
+    // Sources & ranking
+    var srcContacts by P("set.srcContacts", true)
+    var srcSettings by P("set.srcSettings", true)
+    var srcWeb by P("set.srcWeb", true)
+    var boostFrequent by P("set.boostFrequent", true)
+    var fuzzy by P("set.fuzzy", true)
+    var engine by P("set.engine", "Google")
+
     // App drawer
     var drawerColumns by P("set.drawerColumns", 4)
     var suggested by P("set.suggested", true)
@@ -115,7 +127,9 @@ fun SettingsScreen(apps: Apps, start: String, onClose: () -> Unit) {
 
 private fun settingsPages(apps: Apps): List<Page> = listOf(
     Page("search", "Search", SIc.calc, true, "Search & calculator", { "Math, units, currency, time zones" }, "", null),
-    Page("sources", "Search", SIc.sources, true, "Sources & ranking", { "Apps, contacts, settings, web" }, "", null),
+    Page("sources", "Search", SIc.sources, true, "Sources & ranking",
+        { (listOf("Apps") + listOfNotNull("contacts".takeIf { prefs.srcContacts }, "settings".takeIf { prefs.srcSettings }, "web".takeIf { prefs.srcWeb })).joinToString(", ") },
+        "contacts people settings web engine google duckduckgo fuzzy frequent ranking") { SourcesSettings() },
     Page("home", "Layout", SIc.home, false, "Home screen", { "Grid ${prefs.columns} × ${prefs.rows} · icons ${prefs.iconSize}%" },
         "columns rows grid icon size shape labels lock layout") { HomeSettings() },
     Page("dock", "Layout", SIc.dock, false, "Dock & search bar", { "4 icons · search bar at bottom" }, "", null),
@@ -392,4 +406,37 @@ private fun DrawerSettings(apps: Apps) {
         })
     }
     editing?.let { i -> GroupEditor(apps, i) { editing = null } }
+}
+
+@Composable
+private fun SourcesSettings() {
+    val context = LocalContext.current
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { prefs.srcContacts = it }
+    var engines by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Group("Search in", listOf(
+            { SwitchRow("Apps", "Always on", true) {} },
+            {
+                SwitchRow("Contacts", if (hasContacts(context)) "Names, with call and message buttons" else "Asks for contacts access", prefs.srcContacts) { on ->
+                    if (on && !hasContacts(context)) ask.launch(android.Manifest.permission.READ_CONTACTS) else prefs.srcContacts = on
+                }
+            },
+            { SwitchRow("Settings", "System settings and this launcher's pages", prefs.srcSettings) { prefs.srcSettings = it } },
+            { SwitchRow("Web search", "A last row that searches the web", prefs.srcWeb) { prefs.srcWeb = it } },
+        ))
+        Group("Ranking", listOf(
+            { SwitchRow("Prefer apps you use", "Frequent apps win ties", prefs.boostFrequent) { prefs.boostFrequent = it } },
+            { SwitchRow("Fuzzy matching", "“gml” finds Gmail", prefs.fuzzy) { prefs.fuzzy = it } },
+            {
+                Box {
+                    ValueRow("Search engine", prefs.engine) { engines = true }
+                    DropdownMenu(engines, { engines = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
+                        listOf("Google", "DuckDuckGo", "Bing", "Startpage").forEach { e ->
+                            DropdownMenuItem({ Text(e, color = if (e == prefs.engine) Accent else Fg) }, { prefs.engine = e; engines = false })
+                        }
+                    }
+                }
+            },
+        ))
+    }
 }
