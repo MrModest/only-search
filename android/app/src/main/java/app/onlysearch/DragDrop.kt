@@ -11,14 +11,15 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.layout.LayoutCoordinates
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 
-/** An item picked up for dragging. [from] is "grid", "dock", "drawer" or "picker"; [grab] is the finger's offset inside it. */
-data class Dragged(val key: String, val w: Int, val h: Int, val from: String, val grab: Offset, val size: Size)
+/** An item picked up for dragging. [from] is "grid", "dock", "drawer", "popup" or "picker"; [grab] is the finger's offset inside it. */
+data class Dragged(val key: String, val w: Int, val h: Int, val from: String, val grab: Offset, val size: Size, val icon: ImageBitmap? = null)
 
 /** Drag-and-drop state shared by every screen. Positions are window coordinates. */
 class DragDrop {
@@ -27,6 +28,8 @@ class DragDrop {
     /** Grid bounds per home page id, and the dock row. */
     val grids = mutableStateMapOf<Long, Rect>()
     var dock by mutableStateOf(Rect.Zero)
+    /** The "Remove" drop zone shown while dragging something off home. */
+    var remove by mutableStateOf(Rect.Zero)
     var onStart: (Dragged) -> Unit = {}
     var onDrop: (Dragged, Offset) -> Unit = { _, _ -> }
 
@@ -47,6 +50,9 @@ class DragDrop {
 }
 
 val LocalDragDrop = staticCompositionLocalOf { DragDrop() }
+
+/** Opens the widget picker, optionally for one app's package. */
+val LocalPickWidgets = staticCompositionLocalOf<(String?) -> Unit> { {} }
 
 /**
  * Tap, long-press, and long-press-then-drag in one detector. After the long press every move is consumed,

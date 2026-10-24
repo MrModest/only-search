@@ -69,6 +69,10 @@ class Apps(private val context: Context) {
         addAll(sp.list("history").mapNotNull { it.split('\t').takeIf { p -> p.size == 2 }?.let { p -> p[0] to p[1] } })
     }
     val recent = mutableStateListOf<String>().apply { addAll(sp.list("recent")) }
+    val hidden = mutableStateListOf<String>().apply { addAll(sp.list("hidden")) }
+    /** Apps shown in the drawer and search: everything not hidden. */
+    val visible get() = all.filter { it.key !in hidden }
+    private val systemLabels = mutableMapOf<String, String>()
     private val counts = mutableStateMapOf<String, Int>()
     val loaded = mutableStateOf(false)
 
@@ -80,6 +84,7 @@ class Apps(private val context: Context) {
             val apps = users.flatMap { user ->
                 launcher.getActivityList(null, user).map { App(it.label.toString(), it.componentName, user) to it }
             }.filter { it.first.component.packageName != context.packageName }
+                .map { (app, info) -> systemLabels[app.key] = app.label; app.copy(label = sp.getString("label:${app.key}", null) ?: app.label) to info }
                 .sortedBy { it.first.label.lowercase() }
             val size = (56 * context.resources.displayMetrics.density).toInt()
             apps to apps.filter { it.first.key !in icons }.associate { (app, info) -> app.key to squareIcon(info.getIcon(0), size) }
@@ -91,7 +96,7 @@ class Apps(private val context: Context) {
         loaded.value = true
     }
 
-    fun frequent(n: Int) = all.filter { (counts[it.key] ?: 0) > 0 }.sortedByDescending { counts[it.key] }.take(n)
+    fun frequent(n: Int) = visible.filter { (counts[it.key] ?: 0) > 0 }.sortedByDescending { counts[it.key] }.take(n)
 
     /** True between launching an app and coming back home; drives the return animation. */
     var returningFromApp = false
@@ -206,12 +211,12 @@ class Apps(private val context: Context) {
 
     fun makeDefault(i: Int) { defaultPage = i; savePages() }
 
-    private fun savePages() = sp.edit {
+    private fun savePages() = syncPins().also { sp.edit {
         putString("pages", JSONArray(pages.map { p ->
             JSONObject().put("items", JSONArray(p.items.map { JSONObject().put("k", it.key).put("x", it.x).put("y", it.y).put("w", it.w).put("h", it.h) }))
         }).toString())
         putInt("defaultPage", defaultPage)
-    }
+    } }
 
     // Before pages there was one "home" list (apps sat in the bottom rows) and one "widgets" list (stacked at the top).
     private fun loadPages(): List<HomePage> {
@@ -257,6 +262,57 @@ class Apps(private val context: Context) {
         pages[fromPage] = pages[fromPage].copy(items = pages[fromPage].items + other.copy(x = from.x, y = from.y))
         savePages()
         return true
+    }
+
+    fun hide(app: App, hide: Boolean) {
+        hidden.remove(app.key); if (hide) hidden.add(app.key)
+        sp.edit { putString("hidden", hidden.joinToString("\n")) }
+    }
+
+    fun systemLabel(app: App) = systemLabels[app.key] ?: app.label
+
+    /** A custom name for the app; blank goes back to the app's own name. */
+    fun rename(app: App, label: String) {
+        val name = label.trim().ifEmpty { systemLabel(app) }
+        sp.edit { if (name == systemLabel(app)) remove("label:${app.key}") else putString("label:${app.key}", name) }
+        val i = all.indexOfFirst { it.key == app.key }
+        if (i >= 0) all[i] = all[i].copy(label = name)
+        all.sortBy { it.label.lowercase() }
+    }
+
+    // Pinned shortcuts live on the grid as "s:<user>:<package>/<id>".
+    fun shortcutKey(s: Shortcut) = "s:${s.app.user.hashCode()}:${s.info.`package`}/${s.info.id}"
+
+    private fun parseShortcut(key: String): Triple<Int, String, String>? {
+        val (user, rest) = key.removePrefix("s:").split(":", limit = 2).takeIf { it.size == 2 } ?: return null
+        val (pkg, id) = rest.split("/", limit = 2).takeIf { it.size == 2 } ?: return null
+        return Triple(user.toIntOrNull() ?: return null, pkg, id)
+    }
+
+    private val shortcutCache = mutableMapOf<String, Shortcut?>()
+
+    fun pinnedShortcut(key: String): Shortcut? = shortcutCache.getOrPut(key) {
+        val (user, pkg, id) = parseShortcut(key) ?: return null
+        val app = all.firstOrNull { it.component.packageName == pkg && it.user.hashCode() == user } ?: return null
+        if (!launcher.hasShortcutHostPermission()) return null
+        val q = LauncherApps.ShortcutQuery().setPackage(pkg).setShortcutIds(listOf(id)).setQueryFlags(
+            LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+        )
+        runCatching { launcher.getShortcuts(q, app.user) }.getOrNull()?.firstOrNull()?.let { Shortcut((it.shortLabel ?: it.longLabel ?: "").toString(), app, it) }
+    }
+
+    private var pinned = pages.flatMap { p -> p.items.map { it.key } }.filter { it.startsWith("s:") }.toSet()
+
+    // The system only keeps a shortcut alive while a launcher pins it; pinShortcuts replaces a package's whole set.
+    private fun syncPins() {
+        val now = pages.flatMap { p -> p.items.map { it.key } }.filter { it.startsWith("s:") }.toSet()
+        if (now == pinned) return
+        (now + pinned).mapNotNull(::parseShortcut).map { it.first to it.second }.distinct().forEach { (user, pkg) ->
+            val handle = all.firstOrNull { it.component.packageName == pkg && it.user.hashCode() == user }?.user ?: return@forEach
+            val ids = now.mapNotNull(::parseShortcut).filter { it.first == user && it.second == pkg }.map { it.third }
+            runCatching { launcher.pinShortcuts(pkg, ids, handle) }
+        }
+        pinned = now
     }
 
     fun remember(expression: String, result: String) {

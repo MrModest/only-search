@@ -98,6 +98,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
+import android.appwidget.AppWidgetManager
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.toSize
@@ -197,6 +200,10 @@ internal object Ic {
     val uninstall = line("M5 7h14 M10 7V4h4v3 M7 7l1 13h8l1-13")
     val expand = line("M6 9l6 6 6-6", 2f)
     val collapse = line("M6 15l6-6 6 6", 2f)
+    val widgets = line("M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z")
+    val edit = line("M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4")
+    val hide = line("M3 3l18 18 M10.6 5.1A10 10 0 0 1 12 5c5 0 9 4.5 10 7-0.4 1-1.2 2.3-2.4 3.5 M6.6 6.6C4.6 8 3.3 10 2 12c1 2.5 5 7 10 7 1.8 0 3.4-.5 4.8-1.3 M9.9 9.9a3 3 0 0 0 4.2 4.2")
+    val grip = line("M5 9h14 M5 15h14", 1.8f)
 }
 
 @Composable
@@ -217,6 +224,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     var searching by remember { mutableStateOf(initialQuery != null) }
     var query by remember { mutableStateOf(initialQuery.orEmpty()) }
     var picking by remember { mutableStateOf(false) }
+    var pickFor by remember { mutableStateOf<String?>(null) }
     var settings by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf(false) }
     val pager = rememberPagerState(apps.defaultPage) { apps.pages.size }
@@ -289,19 +297,24 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             onVoice = { query = it; searching = true },
             onDrag = { dragDrawer(it) },
             onDragEnd = { v -> settleDrawer(v < -600f || (v < 600f && drawer.value > 0.3f)) },
-            onPickWidget = { picking = true },
+            onPickWidget = { pickFor = null; picking = true },
             onSettings = { settings = it },
             onEdit = { editing = true },
         )
     }
 
-    dnd.onStart = { if (it.from == "drawer") settleDrawer(false) }
+    dnd.onStart = { if (it.from == "drawer" || it.from == "popup") { settleDrawer(false); closeSearch() } }
     dnd.onDrop = { d, at ->
         val page = pager.currentPage
         val grid = apps.pages.getOrNull(page)?.let { dnd.grids[it.id] }
         val target = grid?.let { dnd.target(d, at, it) }
         when {
-            d.w == 1 && d.h == 1 && !d.key.startsWith("w:") && dnd.dock.contains(at) ->
+            (d.from == "grid" || d.from == "dock") && dnd.remove.contains(at) -> {
+                d.key.removePrefix("w:").toIntOrNull()?.takeIf { d.key.startsWith("w:") }?.let(widgets::remove)
+                apps.removeItem(d.key)
+                if (apps.dock.remove(d.key)) apps.saveDock()
+            }
+            apps.byKey(d.key) != null && dnd.dock.contains(at) ->
                 apps.dropOnDock(d.key, ((at.x - dnd.dock.left) / (dnd.dock.width / 4)).toInt())
             target != null -> if (apps.moveTo(page, target) && d.from == "dock") apps.dock.remove(d.key).also { apps.saveDock() }
         }
@@ -318,7 +331,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
         }
     }
 
-    CompositionLocalProvider(LocalDragDrop provides dnd) {
+    CompositionLocalProvider(LocalDragDrop provides dnd, LocalPickWidgets provides { pkg: String? -> pickFor = pkg; picking = true }) {
     ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
         Box(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().graphicsLayer {
@@ -348,9 +361,9 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             }
             AnimatedVisibility(editing, enter = fadeIn(tween(160)) + scaleIn(tween(220), 1.06f), exit = fadeOut(tween(140)) + scaleOut(tween(180), 1.06f)) {
                 EditHome(apps, widgets, onDone = { page -> editing = false; scope.launch { pager.scrollToPage(page) } },
-                    onPickWidget = { picking = true }, onSettings = { settings = it })
+                    onPickWidget = { pickFor = null; picking = true }, onSettings = { settings = it })
             }
-            if (picking) WidgetPicker(apps, widgets) { picking = false }
+            if (picking) WidgetPicker(apps, widgets, pickFor) { picking = false }
             AnimatedVisibility(
                 settings != null,
                 enter = fadeIn(tween(160)) + slideInHorizontally(tween(220)) { it / 8 },
@@ -358,9 +371,27 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             ) {
                 SettingsScreen(apps, settings ?: "hub") { settings = null }
             }
+            if (dnd.item?.from.let { it == "grid" || it == "dock" }) RemoveZone(dnd)
             DragGhost(apps, dnd)
         }
     }
+    }
+}
+
+/** Drop here to take an app, shortcut or widget off home. */
+@Composable
+private fun BoxScope.RemoveZone(dnd: DragDrop) {
+    val over = dnd.remove.contains(dnd.pos)
+    val slack = with(LocalDensity.current) { 24.dp.toPx() }
+    Row(
+        Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 10.dp).height(48.dp)
+            .onGloballyPositioned { dnd.remove = it.boundsInWindow().inflate(slack) }
+            .clip(CircleShape).background(if (over) Danger.copy(alpha = 0.25f) else PopupBg).border(1.dp, if (over) Danger else PillLine, CircleShape)
+            .padding(horizontal = 22.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(Ic.close, null, tint = Danger, modifier = Modifier.size(18.dp))
+        Text("Remove", color = if (over) Danger else Fg, fontSize = 14.sp)
     }
 }
 
@@ -374,7 +405,8 @@ private fun DragGhost(apps: Apps, dnd: DragDrop) {
     Box(Modifier.offset { IntOffset((dnd.pos.x - d.grab.x).roundToInt(), (dnd.pos.y - d.grab.y).roundToInt()) }.size(w, h)
         .graphicsLayer { scaleX = 1.08f; scaleY = 1.08f }) {
         val app = apps.byKey(d.key)
-        if (app != null) AppIcon(apps, app, w)
+        if (d.icon != null) Image(d.icon, null, Modifier.fillMaxSize().clip(iconShape(prefs.iconShape, w)))
+        else if (app != null) AppIcon(apps, app, w)
         else Box(Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).background(Accent.copy(alpha = 0.18f)).border(2.dp, Accent, RoundedCornerShape(24.dp)))
     }
 }
@@ -484,7 +516,8 @@ internal fun HomeGrid(apps: Apps, widgets: Widgets, index: Int, page: HomePage, 
             key(c.key) {
                 val id = c.widgetId
                 if (id == null) Box(Modifier.offset(cw * c.x, ch * c.y).size(cw * c.w, ch * c.h), contentAlignment = Alignment.Center) {
-                    apps.byKey(c.key)?.let { AppTile(apps, it, if (prefs.labels) Fg else null, icon, drag = "grid") }
+                    if (c.key.startsWith("s:")) ShortcutTile(apps, c.key, if (prefs.labels) Fg else null, icon)
+                    else apps.byKey(c.key)?.let { AppTile(apps, it, if (prefs.labels) Fg else null, icon, drag = "grid") }
                 } else {
                     val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
                     val now by rememberUpdatedState(c)
@@ -610,12 +643,12 @@ internal fun MicButton(onText: (String) -> Unit) {
 }
 
 @Composable
-internal fun WidgetPicker(apps: Apps, widgets: Widgets, onClose: () -> Unit) {
+internal fun WidgetPicker(apps: Apps, widgets: Widgets, only: String?, onClose: () -> Unit) {
     val context = LocalContext.current
     val pm = context.packageManager
     val density = context.resources.displayMetrics.density
     val groups = remember {
-        widgets.providers().groupBy { it.provider.packageName }.map { (pkg, list) ->
+        widgets.providers().filter { only == null || it.provider.packageName == only }.groupBy { it.provider.packageName }.map { (pkg, list) ->
             Triple(pkg, runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg), list)
         }.sortedBy { it.second.lowercase() }
     }
@@ -710,12 +743,16 @@ internal fun WidgetPreview(p: AppWidgetProviderInfo, modifier: Modifier, onClick
 
 // ---------- Apps ----------
 
-/** Tracks a composable's on-screen bounds so a launch can zoom out of it. */
+/** Tracks a composable's bounds so a launch can zoom out of it, and a menu can point at it (screen coordinates). */
 @Composable
-internal fun rememberLaunchSource(): Pair<Modifier, () -> LaunchSource> {
+internal fun rememberLaunchSource(): Triple<Modifier, () -> LaunchSource, () -> Rect> {
     val view = LocalView.current
-    var bounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
-    return Modifier.onGloballyPositioned { bounds = it.boundsInWindow() } to { LaunchSource(view, bounds.toAndroidRect()) }
+    var bounds by remember { mutableStateOf(Rect.Zero) }
+    var screen by remember { mutableStateOf(Rect.Zero) }
+    return Triple(
+        Modifier.onGloballyPositioned { bounds = it.boundsInWindow(); screen = Rect(it.localToScreen(Offset.Zero), it.size.toSize()) },
+        { LaunchSource(view, bounds.toAndroidRect()) }, { screen },
+    )
 }
 
 @Composable
@@ -739,7 +776,7 @@ internal fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifie
     val dnd = LocalDragDrop.current
     val lifted = dnd.item?.let { it.key == app.key && it.from == drag } == true
     val scale by animateFloatAsState(if (pressed) 0.88f else if (menu) 1.1f else 1f, spring(dampingRatio = 0.6f, stiffness = 700f), label = "press")
-    val (track, source) = rememberLaunchSource()
+    val (track, source, anchor) = rememberLaunchSource()
     val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val canDrag = drag != null && !prefs.lockLayout
     Box(modifier) {
@@ -768,7 +805,44 @@ internal fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifie
             if (labelColor != null) Text(app.label, color = labelColor, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = shadowed(), modifier = Modifier.padding(top = 7.dp, start = 2.dp, end = 2.dp))
         }
-        if (menu) AppPopup(apps, app) { menu = false }
+        if (menu) AppPopup(apps, app, anchor(), hint = canDrag && drag != "drawer") { menu = false }
+    }
+}
+
+/** A pinned app shortcut on the home grid: its icon with a small app badge. Tap opens it; hold and drag moves it. */
+@Composable
+internal fun ShortcutTile(apps: Apps, key: String, labelColor: Color?, size: Dp) {
+    val s = remember(key, apps.all.size) { apps.pinnedShortcut(key) }
+    val icon = remember(s) { s?.let(apps::shortcutIcon) }
+    val haptic = LocalHapticFeedback.current
+    val dnd = LocalDragDrop.current
+    val (track, source) = rememberLaunchSource()
+    val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val lifted = dnd.item?.key == key
+    Column(
+        Modifier.fillMaxWidth().onGloballyPositioned { coords[0] = it }.graphicsLayer { alpha = if (lifted) 0.25f else 1f }
+            .semantics { onClick { s?.let { apps.launch(it, source()) }; true } }
+            .pointerInput(key, prefs.lockLayout) {
+                tapHoldDrag(
+                    { coords[0] }, onTap = { s?.let { apps.launch(it, source()) } },
+                    onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                    onDragStart = if (prefs.lockLayout) null else { _, at ->
+                        val px = size.toPx()
+                        dnd.start(Dragged(key, 1, 1, "grid", Offset(px / 2, px / 2), Size(px, px), icon), at)
+                    },
+                    onDrag = dnd::move, onDragEnd = dnd::end,
+                )
+            },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(track.size(size)) {
+            val shape = iconShape(prefs.iconShape, size)
+            if (icon != null) Image(icon, s?.label, Modifier.fillMaxSize().clip(shape).background(Tile))
+            else Box(Modifier.fillMaxSize().clip(shape).background(Tile).border(1.dp, TileLine, shape))
+            s?.app?.let { AppIcon(apps, it, size * 0.4f, Modifier.align(Alignment.BottomEnd).offset(4.dp, 4.dp)) }
+        }
+        if (labelColor != null) Text(s?.label ?: "Unavailable", color = labelColor, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = shadowed(), modifier = Modifier.padding(top = 7.dp, start = 2.dp, end = 2.dp))
     }
 }
 
@@ -790,60 +864,156 @@ internal fun AppIcon(apps: Apps, app: App, size: Dp, modifier: Modifier = Modifi
     if (bmp != null) Image(bmp, app.label, m) else Box(m.background(Tile).border(1.dp, TileLine, shape))
 }
 
-/** Places the popup above its anchor (below if there's no room), horizontally centred and kept on screen. */
-internal object AboveAnchor : PopupPositionProvider {
-    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
-        val x = (anchorBounds.center.x - popupContentSize.width / 2).coerceIn(0, max(0, windowSize.width - popupContentSize.width))
-        val above = anchorBounds.top - popupContentSize.height
-        return IntOffset(x, if (above >= 0) above else anchorBounds.bottom)
+private object FullScreen : PopupPositionProvider {
+    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize) = IntOffset.Zero
+}
+
+/**
+ * Long-press menu, full screen: the screen dims, the pressed icon stays lit, and the card points at it.
+ * Shortcuts open on tap, or can be dragged out of the card onto home to pin them. [anchor] is in screen coordinates.
+ */
+@Composable
+internal fun AppPopup(apps: Apps, app: App, anchor: Rect, hint: Boolean, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val dnd = LocalDragDrop.current
+    val pickWidgets = LocalPickWidgets.current
+    val density = LocalDensity.current
+    val shortcuts = remember(app) { apps.shortcuts(app).take(4).map { it to apps.shortcutIcon(it) } }
+    val hasWidgets = remember(app) {
+        runCatching { AppWidgetManager.getInstance(context).getInstalledProvidersForPackage(app.component.packageName, app.user).isNotEmpty() }.getOrDefault(false)
+    }
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)) }
+    var dragging by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(22.dp)
+    Popup(popupPositionProvider = FullScreen, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true, clippingEnabled = false)) {
+        ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
+            var root by remember { mutableStateOf<LayoutCoordinates?>(null) }
+            Box(Modifier.fillMaxSize().onGloballyPositioned { root = it }.graphicsLayer { alpha = if (dragging) 0f else 1f }) {
+                val r = root?.takeIf { it.isAttached }
+                val a = if (r == null) Rect.Zero else Rect(r.screenToLocal(anchor.topLeft), r.screenToLocal(anchor.bottomRight))
+                Box(Modifier.fillMaxSize().graphicsLayer { alpha = appear.value.coerceIn(0f, 1f) }.background(Color(0x99000000))
+                    .clickable(interactionSource = null, indication = null, onClick = onDismiss))
+                if (r == null) return@Box
+                if (renaming) {
+                    RenameCard(apps, app, Modifier.align(Alignment.Center)) { renaming = false; onDismiss() }
+                    return@Box
+                }
+                // The pressed icon, lit above the dim.
+                Box(Modifier.offset { IntOffset(a.left.roundToInt(), a.top.roundToInt()) }) { AppIcon(apps, app, with(density) { a.width.toDp() }, ring = true) }
+                if (hint) Text("drag to move · drag a shortcut out to pin it", color = Muted, fontSize = 11.sp, fontFamily = Mono,
+                    modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp))
+                Layout(
+                    content = {
+                        Box(Modifier.size(16.dp).graphicsLayer { rotationZ = 45f }.background(PopupBg).border(1.dp, PillLine))
+                        Column(Modifier.width(288.dp).shadow(24.dp, shape).background(PopupBg, shape).border(1.dp, PillLine, shape).padding(6.dp)) {
+                            Text(app.label, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp))
+                            shortcuts.forEach { (s, icon) ->
+                                ShortcutRow(apps, s, icon, onDragging = { dragging = it }, onDone = onDismiss)
+                            }
+                            if (shortcuts.isNotEmpty()) Box(Modifier.padding(6.dp).fillMaxWidth().height(1.dp).background(ChipLine))
+                            Row(Modifier.fillMaxWidth()) {
+                                PopupAction(Ic.info, "Info", Fg) { apps.appInfo(app); onDismiss() }
+                                if (hasWidgets) PopupAction(Ic.widgets, "Widgets", Fg) { pickWidgets(app.component.packageName); onDismiss() }
+                                PopupAction(Ic.edit, "Edit", Fg) { renaming = true }
+                                val isHidden = app.key in apps.hidden
+                                PopupAction(Ic.hide, if (isHidden) "Unhide" else "Hide", if (isHidden) Accent else Fg) {
+                                    apps.hide(app, !isHidden)
+                                    if (!isHidden) Toast.makeText(context, "${app.label} hidden from the drawer and search", Toast.LENGTH_SHORT).show()
+                                    onDismiss()
+                                }
+                                PopupAction(Ic.uninstall, "Uninstall", Danger) { apps.uninstall(app); onDismiss() }
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        val v = appear.value
+                        scaleX = 0.92f + 0.08f * v; scaleY = 0.92f + 0.08f * v; alpha = v.coerceIn(0f, 1f)
+                        transformOrigin = TransformOrigin(a.center.x / size.width.coerceAtLeast(1f), a.top / size.height.coerceAtLeast(1f))
+                    },
+                ) { ms, c ->
+                    val tail = ms[0].measure(Constraints())
+                    val card = ms[1].measure(Constraints(maxWidth = c.maxWidth))
+                    val margin = 12.dp.roundToPx(); val gap = 14.dp.roundToPx()
+                    val x = (a.center.x - card.width / 2).roundToInt().coerceIn(margin, max(margin, c.maxWidth - card.width - margin))
+                    val aboveY = a.top.roundToInt() - gap - card.height
+                    val above = aboveY >= 48.dp.roundToPx()
+                    val y = if (above) aboveY else a.bottom.roundToInt() + gap
+                    layout(c.maxWidth, c.maxHeight) {
+                        val inset = 22.dp.roundToPx()
+                        val tx = (a.center.x - tail.width / 2).roundToInt().coerceIn(x + inset, max(x + inset, x + card.width - inset - tail.width))
+                        tail.place(tx, if (above) y + card.height - tail.height / 2 else y - tail.height / 2)
+                        card.place(x, y)
+                    }
+                }
+            }
+        }
     }
 }
 
-/** Long-press card: the app's shortcuts, then a row of quick actions. Scales in from the icon. */
+/** A shortcut in the menu. Tap opens it; dragging it past the touch slop picks it up to pin on home. */
 @Composable
-internal fun AppPopup(apps: Apps, app: App, onDismiss: () -> Unit) {
-    val shortcuts = remember(app) { apps.shortcuts(app).take(4).map { it to apps.shortcutIcon(it) } }
-    val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)) }
-    val shape = RoundedCornerShape(22.dp)
-    Popup(popupPositionProvider = AboveAnchor, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
-        ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
-            Column(
-                Modifier.padding(10.dp).width(288.dp)
-                    .graphicsLayer {
-                        val v = appear.value
-                        scaleX = 0.85f + 0.15f * v; scaleY = 0.85f + 0.15f * v; alpha = v.coerceIn(0f, 1f)
-                        transformOrigin = TransformOrigin(0.5f, 1f)
+private fun ShortcutRow(apps: Apps, s: Shortcut, icon: ImageBitmap?, onDragging: (Boolean) -> Unit, onDone: () -> Unit) {
+    val dnd = LocalDragDrop.current
+    val (track, source) = rememberLaunchSource()
+    val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    Row(
+        Modifier.fillMaxWidth().height(48.dp).then(track).onGloballyPositioned { coords[0] = it }.clip(RoundedCornerShape(14.dp))
+            .semantics { onClick { apps.launch(s, source()); onDone(); true } }
+            .pointerInput(s) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    var dragging = false
+                    while (true) {
+                        val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                        val at = coords[0]?.takeIf { it.isAttached }?.localToScreen(c.position) ?: break
+                        if (!c.pressed) {
+                            if (dragging) dnd.end() else apps.launch(s, source())
+                            onDone(); return@awaitEachGesture
+                        }
+                        if (!dragging && !prefs.lockLayout && (c.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                            dragging = true; onDragging(true)
+                            val px = (58.dp * prefs.iconSize / 100).toPx()
+                            dnd.start(Dragged(apps.shortcutKey(s), 1, 1, "popup", Offset(px / 2, px / 2), Size(px, px), icon), at)
+                        }
+                        if (dragging) { c.consume(); dnd.move(at) }
                     }
-                    .shadow(24.dp, shape).background(PopupBg, shape).border(1.dp, PillLine, shape).padding(6.dp)
-            ) {
-                Text(app.label, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp))
-                shortcuts.forEach { (s, icon) ->
-                    val (track, source) = rememberLaunchSource()
-                    Row(Modifier.fillMaxWidth().height(48.dp).then(track).clip(RoundedCornerShape(14.dp))
-                        .clickable { apps.launch(s, source()); onDismiss() }.padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        val m = Modifier.size(22.dp).clip(RoundedCornerShape(6.dp))
-                        if (icon != null) Image(icon, null, m) else Box(m.background(Tile))
-                        Text(s.label, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                if (shortcuts.isNotEmpty()) Box(Modifier.padding(6.dp).fillMaxWidth().height(1.dp).background(ChipLine))
-                Row(Modifier.fillMaxWidth()) {
-                    val onHome = apps.onHome(app)
-                    val onDock = app.key in apps.dock
-                    PopupAction(Ic.info, "Info", Fg) { apps.appInfo(app); onDismiss() }
-                    val context = LocalContext.current
-                    fun unlocked(action: () -> Unit) {
-                        if (prefs.lockLayout) Toast.makeText(context, "Layout is locked (Settings › Home screen)", Toast.LENGTH_SHORT).show() else action()
-                        onDismiss()
-                    }
-                    PopupAction(Ic.home, if (onHome) "Unpin" else "Home", if (onHome) Accent else Fg) { unlocked { apps.toggleHome(app) } }
-                    PopupAction(Ic.dock, if (onDock) "Undock" else "Dock", if (onDock) Accent else Fg) { unlocked { apps.toggleDock(app) } }
-                    PopupAction(Ic.uninstall, "Uninstall", Danger) { apps.uninstall(app); onDismiss() }
+                    if (dragging) { dnd.item = null; onDone() }
                 }
             }
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        val m = Modifier.size(22.dp).clip(RoundedCornerShape(6.dp))
+        if (icon != null) Image(icon, null, m) else Box(m.background(Tile))
+        Text(s.label, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Icon(Ic.grip, "Drag to pin", tint = Dim, modifier = Modifier.size(16.dp))
+    }
+}
+
+@Composable
+private fun RenameCard(apps: Apps, app: App, modifier: Modifier, onDone: () -> Unit) {
+    var name by remember { mutableStateOf(app.label) }
+    val shape = RoundedCornerShape(22.dp)
+    Column(
+        modifier.padding(24.dp).fillMaxWidth().shadow(24.dp, shape).background(PopupBg, shape).border(1.dp, PillLine, shape)
+            .clickable(interactionSource = null, indication = null) {}.padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text("Rename", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Row(Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp)).background(FieldBg).border(1.5.dp, Accent, RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Field(name, { name = it }, apps.systemLabel(app), Modifier.weight(1f), autoFocus = true) { apps.rename(app, name); onDone() }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (app.label != apps.systemLabel(app)) Text("Reset", color = Accent, fontSize = 14.sp,
+                modifier = Modifier.clip(CircleShape).clickable { apps.rename(app, ""); onDone() }.padding(horizontal = 10.dp, vertical = 8.dp))
+            Spacer(Modifier.weight(1f))
+            Text("Cancel", color = Muted, fontSize = 14.sp, modifier = Modifier.clip(CircleShape).clickable(onClick = onDone).padding(horizontal = 12.dp, vertical = 8.dp))
+            Box(Modifier.height(38.dp).clip(CircleShape).background(Accent).clickable { apps.rename(app, name); onDone() }.padding(horizontal = 18.dp),
+                contentAlignment = Alignment.Center) { Text("Save", color = OnAccent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
         }
     }
 }
@@ -869,7 +1039,7 @@ internal fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: 
     val grid = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     val frequent = apps.frequent(4)
-    val sections = apps.all.groupBy { it.label.firstOrNull()?.uppercaseChar()?.takeIf(Char::isLetter) ?: '#' }.toSortedMap()
+    val sections = apps.visible.groupBy { it.label.firstOrNull()?.uppercaseChar()?.takeIf(Char::isLetter) ?: '#' }.toSortedMap()
     // Grid index of each section header, for the letter scrubber.
     val headerIndex = remember(sections, frequent) {
         var i = if (frequent.isEmpty()) 0 else 2 + frequent.size
@@ -931,7 +1101,7 @@ internal fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: 
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF22252A)))
-        Pill("Search ${apps.all.size} apps or calculate", Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
+        Pill("Search ${apps.visible.size} apps or calculate", Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
             height = 52.dp, onClick = onSearch)
     }
 }
@@ -957,9 +1127,9 @@ internal fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit) 
             calc = if (r.isBlank() || r == q.trim()) null else Calc(q.trim(), r, us)
         }
     }
-    val (matches, matchMicros) = remember(query, apps.all.size) {
+    val (matches, matchMicros) = remember(query, apps.all.toList(), apps.hidden.size) {
         val t0 = System.nanoTime()
-        apps.all.mapNotNull { a -> match(a.label, query)?.let { Triple(a, it.first, it.second) } }
+        apps.visible.mapNotNull { a -> match(a.label, query)?.let { Triple(a, it.first, it.second) } }
             .sortedWith(compareByDescending<Triple<App, Int, IntRange?>> { it.second }.thenBy { it.first.label.length })
             .take(9) to (System.nanoTime() - t0) / 1000
     }
@@ -1071,7 +1241,7 @@ internal fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit) 
 internal fun TopHit(apps: Apps, app: App, range: IntRange?, shortcuts: List<Shortcut>) {
     var menu by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
-    val (track, source) = rememberLaunchSource()
+    val (track, source, anchor) = rememberLaunchSource()
     val shape = RoundedCornerShape(20.dp)
     Box {
         Column(
@@ -1093,7 +1263,7 @@ internal fun TopHit(apps: Apps, app: App, range: IntRange?, shortcuts: List<Shor
                 shortcuts.forEach { s -> Chip(s.label, Color(0xFF16232F), AccentLine, Inter, 13) { apps.launch(s, source()) } }
             }
         }
-        if (menu) AppPopup(apps, app) { menu = false }
+        if (menu) AppPopup(apps, app, anchor(), hint = false) { menu = false }
     }
 }
 
