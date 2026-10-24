@@ -2,10 +2,11 @@
 
 Each item is checked only after a UI test on the emulator.
 
-- [ ] 1. Settings hub (search settings, sections, entry from home menu)
+- [x] 1. Settings hub (search settings, sections, entry from home menu)
 - [ ] 2. Settings · Home screen (columns, rows, icon size, icon shape, labels, lock layout)
-- [ ] 3. Home pages + page dots + edit mode (carousel, add/delete/reorder pages, default page, Wallpaper / Widgets / Layout / Settings, pinch in)
-- [ ] 4. App context menu extras (home dim, pointer tail, Widgets, Edit, Hide, drag to move, drag a shortcut out to pin it)
+- [ ] 3. Home pages on a cell grid + page dots + edit mode (carousel, add/delete/reorder pages, default page, Wallpaper / Widgets / Layout / Settings, pinch in)
+- [ ] 3b. Drag & drop (user request): move apps on the grid, between pages and to/from the dock, drag from the drawer; move and resize widgets
+- [ ] 4. App context menu extras (home dim, pointer tail, Widgets, Edit, Hide, drag a shortcut out to pin it)
 - [ ] 5. Widget picker: hold & drag to place
 - [ ] 6. Drawer groups (All / custom tabs, new group, ⋮ options) + Settings · App drawer & folders
 - [ ] 7. Search: Settings and People results, top hit "opened … ago", web search + Settings · Sources & ranking

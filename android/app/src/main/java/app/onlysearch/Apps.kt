@@ -21,6 +21,11 @@ import android.view.View
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import org.json.JSONArray
+import org.json.JSONObject
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.edit
@@ -37,6 +42,15 @@ class LaunchSource(private val view: View, val bounds: Rect) {
         ActivityOptions.makeScaleUpAnimation(view, bounds.left, bounds.top, bounds.width(), bounds.height()).toBundle()
 }
 
+/** Something on a home page grid: an app key, or "w:<id>" for a widget. Position and size are in cells. */
+data class Cell(val key: String, val x: Int, val y: Int, val w: Int = 1, val h: Int = 1) {
+    val widgetId get() = if (key.startsWith("w:")) key.substring(2).toIntOrNull() else null
+}
+
+/** One home screen page. [id] only lives in memory, so moved pages keep their composables. */
+data class HomePage(val items: List<Cell> = emptyList(), val id: Long = nextPageId++)
+private var nextPageId = 0L
+
 data class Shortcut(val label: String, val app: App, val info: ShortcutInfo)
 
 /** Installed apps, icons, and the user's pins / launch counts. All state is Compose-observable. */
@@ -46,7 +60,10 @@ class Apps(private val context: Context) {
 
     val all = mutableStateListOf<App>()
     val icons = mutableStateMapOf<String, ImageBitmap>()
-    val home = mutableStateListOf<String>().apply { addAll(sp.list("home")) }
+    val pages = mutableStateListOf<HomePage>().apply { addAll(loadPages()) }
+    var defaultPage by mutableIntStateOf(sp.getInt("defaultPage", 0).coerceIn(pages.indices))
+    /** The page on screen; new pins and widgets land here. */
+    var currentPage by mutableIntStateOf(defaultPage)
     val dock = mutableStateListOf<String>().apply { addAll(sp.list("dock")) }
     val history = mutableStateListOf<Pair<String, String>>().apply {
         addAll(sp.list("history").mapNotNull { it.split('\t').takeIf { p -> p.size == 2 }?.let { p -> p[0] to p[1] } })
@@ -70,7 +87,7 @@ class Apps(private val context: Context) {
         icons.putAll(newIcons)
         sp.all.forEach { (k, v) -> if (k.startsWith("count:") && v is Int) counts[k.removePrefix("count:")] = v }
         all.clear(); all.addAll(apps.map { it.first })
-        if (dock.isEmpty() && home.isEmpty() && !sp.getBoolean("seeded", false)) seedDefaults()
+        if (dock.isEmpty() && pages.all { it.items.isEmpty() } && !sp.getBoolean("seeded", false)) seedDefaults()
         loaded.value = true
     }
 
@@ -92,7 +109,129 @@ class Apps(private val context: Context) {
         if (!list.remove(app.key) && list.size < max) list.add(app.key)
         sp.edit { putString(name, list.joinToString("\n")) }
     }
-    fun toggleHome(app: App) = toggle(home, "home", app, prefs.columns * prefs.rows)
+    fun onHome(app: App) = pages.any { p -> p.items.any { it.key == app.key } }
+
+    /** True if a w×h block fits at (x, y) on [page] without overlapping anything except [ignore]. */
+    fun fits(page: Int, x: Int, y: Int, w: Int, h: Int, ignore: String? = null): Boolean {
+        if (x < 0 || y < 0 || x + w > prefs.columns || y + h > prefs.rows) return false
+        return pages[page].items.none { it.key != ignore && x < it.x + it.w && it.x < x + w && y < it.y + it.h && it.y < y + h }
+    }
+
+    /** First free spot for a w×h block; apps fill up from the bottom row, widgets down from the top. */
+    fun freeSpot(page: Int, w: Int, h: Int, fromBottom: Boolean): Pair<Int, Int>? {
+        val ys = (0..prefs.rows - h).let { if (fromBottom) it.reversed() else it }
+        for (y in ys) for (x in 0..prefs.columns - w) if (fits(page, x, y, w, h)) return x to y
+        return null
+    }
+
+    /** Moves [cell]'s item to that spot on [page], from wherever it was. False if the spot isn't free. */
+    fun place(page: Int, cell: Cell): Boolean {
+        if (!fits(page, cell.x, cell.y, cell.w, cell.h, cell.key)) return false
+        dropItem(cell.key)
+        pages[page] = pages[page].copy(items = pages[page].items + cell)
+        savePages()
+        return true
+    }
+
+    private fun dropItem(key: String) {
+        for (i in pages.indices) if (pages[i].items.any { it.key == key }) pages[i] = pages[i].copy(items = pages[i].items.filter { it.key != key })
+    }
+
+    fun removeItem(key: String) { dropItem(key); savePages() }
+
+    /** Unpins the app wherever it is, or pins it to the current page (or the first one with room). */
+    fun toggleHome(app: App) {
+        if (onHome(app)) return removeItem(app.key)
+        for (p in (listOf(currentPage) + pages.indices).filter { it in pages.indices }) {
+            val (x, y) = freeSpot(p, 1, 1, fromBottom = true) ?: continue
+            place(p, Cell(app.key, x, y)); return
+        }
+    }
+
+    /** Where the next bound widget goes, if it was dropped on a spot. */
+    var widgetSpot: Pair<Int, Cell>? = null
+
+    /** Puts a newly bound widget on the page; false if there's no room for it. */
+    fun addWidget(id: Int, w: Int, h: Int): Boolean {
+        val spot = widgetSpot.also { widgetSpot = null }
+        if (spot != null && place(spot.first, spot.second.copy(key = "w:$id"))) return true
+        val p = currentPage.coerceIn(pages.indices)
+        val cw = w.coerceAtMost(prefs.columns); val ch = h.coerceAtMost(prefs.rows)
+        val (x, y) = freeSpot(p, cw, ch, fromBottom = false) ?: return false
+        return place(p, Cell("w:$id", x, y, cw, ch))
+    }
+
+    fun pruneWidgets(valid: (Int) -> Boolean) {
+        val bad = pages.flatMap { p -> p.items.mapNotNull { it.widgetId }.filterNot(valid) }
+        if (bad.isEmpty()) return
+        bad.forEach { dropItem("w:$it") }
+        savePages()
+    }
+
+    /** After the grid shrinks: shrink widgets that are too big and move what's off the grid to a free spot. */
+    fun fitGrid() {
+        var changed = false
+        for (p in pages.indices) {
+            val items = pages[p].items
+            pages[p] = pages[p].copy(items = emptyList())
+            items.forEach { c ->
+                val s = c.copy(w = c.w.coerceAtMost(prefs.columns), h = c.h.coerceAtMost(prefs.rows))
+                if (s == c && fits(p, s.x, s.y, s.w, s.h)) { pages[p] = pages[p].copy(items = pages[p].items + s); return@forEach }
+                changed = true
+                val (x, y) = freeSpot(p, s.w, s.h, fromBottom = s.widgetId == null) ?: return@forEach
+                pages[p] = pages[p].copy(items = pages[p].items + s.copy(x = x, y = y))
+            }
+        }
+        if (changed) savePages()
+    }
+
+    fun addPage() { pages.add(HomePage()); savePages() }
+
+    /** Returns the deleted page's widget ids so the caller can release them. */
+    fun deletePage(i: Int): List<Int> {
+        val gone = pages.removeAt(i)
+        if (defaultPage > i || defaultPage == pages.size) defaultPage--
+        defaultPage = defaultPage.coerceIn(pages.indices)
+        currentPage = currentPage.coerceIn(pages.indices)
+        savePages()
+        return gone.items.mapNotNull { it.widgetId }
+    }
+
+    fun movePage(from: Int, to: Int) {
+        val def = pages[defaultPage].id
+        pages.add(to, pages.removeAt(from))
+        defaultPage = pages.indexOfFirst { it.id == def }
+        savePages()
+    }
+
+    fun makeDefault(i: Int) { defaultPage = i; savePages() }
+
+    private fun savePages() = sp.edit {
+        putString("pages", JSONArray(pages.map { p ->
+            JSONObject().put("items", JSONArray(p.items.map { JSONObject().put("k", it.key).put("x", it.x).put("y", it.y).put("w", it.w).put("h", it.h) }))
+        }).toString())
+        putInt("defaultPage", defaultPage)
+    }
+
+    // Before pages there was one "home" list (apps sat in the bottom rows) and one "widgets" list (stacked at the top).
+    private fun loadPages(): List<HomePage> {
+        val json = sp.getString("pages", null) ?: run {
+            val cols = prefs.columns; val rows = prefs.rows
+            val apps = sp.list("home").take(cols * rows)
+            val top = rows - (apps.size + cols - 1) / cols
+            val widgets = sp.getString("widgets", "")!!.split(",").mapNotNull { it.toIntOrNull() }
+                .take(top / 2).mapIndexed { i, id -> Cell("w:$id", 0, i * 2, cols, 2) }
+            return listOf(HomePage(widgets + apps.mapIndexed { i, k -> Cell(k, i % cols, top + i / cols) }))
+        }
+        val arr = JSONArray(json)
+        return (0 until arr.length()).map { i ->
+            val items = arr.getJSONObject(i).getJSONArray("items")
+            HomePage((0 until items.length()).map { j ->
+                items.getJSONObject(j).run { Cell(getString("k"), getInt("x"), getInt("y"), getInt("w"), getInt("h")) }
+            })
+        }.ifEmpty { listOf(HomePage()) }
+    }
+
     fun toggleDock(app: App) = toggle(dock, "dock", app, 4)
 
     fun remember(expression: String, result: String) {

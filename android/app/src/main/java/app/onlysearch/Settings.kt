@@ -170,8 +170,8 @@ private fun NavRow(p: Page, onClick: () -> Unit) {
             Icon(p.icon, null, tint = if (p.accent) Accent else Fg, modifier = Modifier.size(18.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(p.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = if (enabled) Fg else Dim)
-            Text(p.subtitle(), color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(p.title, fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, color = if (enabled) Fg else Dim)
+            Text(p.subtitle(), color = Muted, fontSize = 12.sp, lineHeight = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Icon(SIc.next, null, tint = Dim, modifier = Modifier.size(16.dp))
     }
@@ -228,8 +228,8 @@ internal fun SwitchRow(title: String, subtitle: String?, checked: Boolean, monoS
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, fontSize = 15.sp)
-            if (subtitle != null) Text(subtitle, color = Muted, fontSize = if (monoSubtitle) 11.sp else 12.sp, fontFamily = if (monoSubtitle) Mono else Inter)
+            Text(title, fontSize = 15.sp, lineHeight = 18.sp)
+            if (subtitle != null) Text(subtitle, color = Muted, fontSize = if (monoSubtitle) 11.sp else 12.sp, lineHeight = 15.sp, fontFamily = if (monoSubtitle) Mono else Inter)
         }
         Switch(checked, title, onChange)
     }

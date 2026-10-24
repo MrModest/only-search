@@ -4,20 +4,13 @@ import android.app.Activity
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
-import android.content.Context
 import android.content.Intent
-import androidx.compose.runtime.mutableStateListOf
-import androidx.core.content.edit
 
-/** Hosts third-party home-screen widgets. Ids are persisted; bind/configure results arrive via [onResult]. */
+/** Hosts third-party home-screen widgets. Bind/configure results arrive via [onResult]; bound ids go to [onBound]. */
 class Widgets(private val activity: Activity) {
     val host = AppWidgetHost(activity, 1024)
     val manager: AppWidgetManager = AppWidgetManager.getInstance(activity)
-    private val sp = activity.getSharedPreferences("launcher", Context.MODE_PRIVATE)
-    val ids = mutableStateListOf<Int>().apply {
-        addAll(sp.getString("widgets", "")!!.split(",").mapNotNull { it.toIntOrNull() })
-        removeAll { manager.getAppWidgetInfo(it) == null }
-    }
+    var onBound: (Int) -> Unit = {}
     private var pending = -1
 
     fun providers(): List<AppWidgetProviderInfo> =
@@ -55,13 +48,9 @@ class Widgets(private val activity: Activity) {
         }
     }
 
-    fun remove(id: Int) {
-        host.deleteAppWidgetId(id)
-        ids.remove(id); save()
-    }
+    fun remove(id: Int) = host.deleteAppWidgetId(id)
 
-    private fun commit(id: Int) { ids.add(id); save() }
-    private fun save() = sp.edit { putString("widgets", ids.joinToString(",")) }
+    private fun commit(id: Int) = onBound(id)
 
     companion object {
         const val REQ_BIND = 11

@@ -82,6 +82,18 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import android.appwidget.AppWidgetHostView
+import android.os.Bundle
+import android.util.SizeF
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -196,6 +208,9 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     var query by remember { mutableStateOf(initialQuery.orEmpty()) }
     var picking by remember { mutableStateOf(false) }
     var settings by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf(false) }
+    val pager = rememberPagerState(apps.defaultPage) { apps.pages.size }
+    LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect { apps.currentPage = it } }
     val searchProgress by animateFloatAsState(if (searching) 1f else 0f, tween(180), label = "search")
 
     var drawerBlur by remember { mutableStateOf(false) }
@@ -209,7 +224,12 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     fun closeSearch() { searching = false; query = "" }
 
     // Home button: animate back. Leaving to an app: reset silently so the launch animation isn't disturbed.
-    LaunchedEffect(homeTick) { if (homeTick > 0) { closeSearch(); picking = false; settings = null; settleDrawer(false) } }
+    LaunchedEffect(homeTick) {
+        if (homeTick == 0) return@LaunchedEffect
+        val onHome = !searching && !picking && settings == null && !editing && drawer.value == 0f
+        closeSearch(); picking = false; settings = null; editing = false; settleDrawer(false)
+        if (onHome) pager.animateScrollToPage(apps.defaultPage)
+    }
     LaunchedEffect(stopTick) { if (stopTick > 0) { closeSearch(); picking = false; drawerBlur = false; drawer.snapTo(0f) } }
     LaunchedEffect(resumeTick) {
         if (apps.returningFromApp) {
@@ -217,8 +237,8 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             enter.snapTo(0f); enter.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 300f))
         }
     }
-    BackHandler(searching || picking || drawerOpening) {
-        when { picking -> picking = false; searching -> closeSearch(); else -> settleDrawer(false) }
+    BackHandler(searching || picking || editing || drawerOpening) {
+        when { picking -> picking = false; searching -> closeSearch(); editing -> editing = false; else -> settleDrawer(false) }
     }
 
     // Wallpaper blurs behind the open drawer / search (Android 12+, needs cross-window blur enabled).
@@ -260,6 +280,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             onDragEnd = { v -> settleDrawer(v < -600f || (v < 600f && drawer.value > 0.3f)) },
             onPickWidget = { picking = true },
             onSettings = { settings = it },
+            onEdit = { editing = true },
         )
     }
 
@@ -271,7 +292,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
                 scaleX = s; scaleY = s
                 alpha = (1f - p) * enter.value
             }) {
-                HomeScreen(apps, widgets, homeActions)
+                HomeScreen(apps, widgets, pager, homeActions)
             }
             // Status icons are always light (MainActivity); this shade keeps them readable on a light wallpaper.
             Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0x73000000), Color.Transparent)))
@@ -290,6 +311,10 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             ) {
                 SearchScreen(apps, query) { query = it }
             }
+            AnimatedVisibility(editing, enter = fadeIn(tween(160)) + scaleIn(tween(220), 1.06f), exit = fadeOut(tween(140)) + scaleOut(tween(180), 1.06f)) {
+                EditHome(apps, widgets, onDone = { page -> editing = false; scope.launch { pager.scrollToPage(page) } },
+                    onPickWidget = { picking = true }, onSettings = { settings = it })
+            }
             if (picking) WidgetPicker(apps, widgets) { picking = false }
             AnimatedVisibility(
                 settings != null,
@@ -306,46 +331,97 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
 
 internal class HomeActions(
     val onSearch: () -> Unit, val onVoice: (String) -> Unit, val onDrag: (Float) -> Unit, val onDragEnd: (Float) -> Unit, val onPickWidget: () -> Unit,
-    val onSettings: (String) -> Unit,
+    val onSettings: (String) -> Unit, val onEdit: () -> Unit,
 )
 
 @Composable
-internal fun HomeScreen(apps: Apps, widgets: Widgets, actions: HomeActions) {
+internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions: HomeActions) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf(false) }
+    LaunchedEffect(prefs.columns, prefs.rows) { apps.fitGrid() }
     Column(
         Modifier.fillMaxSize()
+            .pointerInput(Unit) { detectPinchIn(actions.onEdit) }
             .draggable(rememberDraggableState(actions.onDrag), Orientation.Vertical, onDragStopped = { actions.onDragEnd(it) })
             .combinedClickable(interactionSource = null, indication = null, onLongClick = {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress); menu = true
             }) {}
-            .systemBarsPadding().padding(start = 18.dp, end = 18.dp, top = 24.dp, bottom = 12.dp).testTag("home")
+            .systemBarsPadding().padding(top = 24.dp, bottom = 12.dp).testTag("home")
     ) {
-        Clock()
-        Spacer(Modifier.height(30.dp))
-        widgets.ids.forEach { id -> WidgetView(widgets, id); Spacer(Modifier.height(10.dp)) }
-        Spacer(Modifier.weight(1f))
-        val iconSize = 58.dp * prefs.iconSize / 100
-        AppGrid(apps, apps.home.mapNotNull(apps::byKey), size = iconSize, labelColor = if (prefs.labels) Fg else null, columns = prefs.columns)
-        Spacer(Modifier.height(22.dp))
-        AppGrid(apps, apps.dock.mapNotNull(apps::byKey), size = iconSize, labelColor = null)
-        Spacer(Modifier.height(16.dp))
-        Pill("Apps, math, units, time…", Modifier.testTag("homeSearch"), onClick = actions.onSearch) { MicButton(actions.onVoice) }
+        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), key = { apps.pages.getOrNull(it)?.id ?: -1L }) { i ->
+            val page = apps.pages.getOrNull(i) ?: return@HorizontalPager
+            Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
+                Clock()
+                Spacer(Modifier.height(24.dp))
+                HomeGrid(apps, widgets, page, Modifier.weight(1f).fillMaxWidth())
+            }
+        }
+        Column(Modifier.padding(horizontal = 18.dp)) {
+            PageDots(apps.pages.size, pager.currentPage, Modifier.padding(vertical = 14.dp))
+            AppGrid(apps, apps.dock.mapNotNull(apps::byKey), size = 58.dp * prefs.iconSize / 100, labelColor = null)
+            Spacer(Modifier.height(16.dp))
+            Pill("Apps, math, units, time…", Modifier.testTag("homeSearch"), onClick = actions.onSearch) { MicButton(actions.onVoice) }
+        }
+        val pageWidgets = apps.pages.getOrNull(pager.currentPage)?.items.orEmpty().mapNotNull { it.widgetId }
         DropdownMenu(menu, { menu = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
+            DropdownMenuItem({ Text("Edit home") }, { menu = false; actions.onEdit() })
             DropdownMenuItem({ Text("Add widget") }, { menu = false; actions.onPickWidget() })
-            if (widgets.ids.isNotEmpty()) DropdownMenuItem({ Text("Remove widget") }, { menu = false; removing = true })
-            DropdownMenuItem({ Text("Wallpaper") }, {
-                menu = false
-                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Wallpaper"))
-            })
+            if (pageWidgets.isNotEmpty()) DropdownMenuItem({ Text("Remove widget") }, { menu = false; removing = true })
+            DropdownMenuItem({ Text("Wallpaper") }, { menu = false; pickWallpaper(context) })
             DropdownMenuItem({ Text("Settings") }, { menu = false; actions.onSettings("hub") })
         }
         DropdownMenu(removing, { removing = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
-            widgets.ids.toList().forEach { id ->
+            pageWidgets.forEach { id ->
                 val label = widgets.manager.getAppWidgetInfo(id)?.loadLabel(context.packageManager) ?: "Widget $id"
-                DropdownMenuItem({ Text("Remove $label") }, { widgets.remove(id); removing = false })
+                DropdownMenuItem({ Text("Remove $label") }, { widgets.remove(id); apps.removeItem("w:$id"); removing = false })
+            }
+        }
+    }
+}
+
+internal fun pickWallpaper(context: android.content.Context) =
+    context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Wallpaper"))
+
+/** Fires once when two fingers pinch together. Only watches; never consumes, so other gestures still work. */
+internal suspend fun PointerInputScope.detectPinchIn(onPinch: () -> Unit) = awaitEachGesture {
+    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+    var start = 0f
+    while (true) {
+        val e = awaitPointerEvent(PointerEventPass.Initial)
+        val down = e.changes.filter { it.pressed }
+        if (down.isEmpty()) break
+        if (down.size < 2) continue
+        val d = (down[0].position - down[1].position).getDistance()
+        if (start == 0f) start = d else if (d < start * 0.65f) { onPinch(); break }
+    }
+}
+
+@Composable
+internal fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().height(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
+        if (count > 1) repeat(count) { i ->
+            val on = i == current
+            Box(Modifier.size(if (on) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (on) Accent else Color(0x66EDEAE4)))
+        }
+    }
+}
+
+/** A home page's cell grid: apps and widgets at their cells, sized from the Home screen settings. */
+@Composable
+internal fun HomeGrid(apps: Apps, widgets: Widgets, page: HomePage, modifier: Modifier) {
+    BoxWithConstraints(modifier) {
+        val cw = maxWidth / prefs.columns
+        val ch = maxHeight / prefs.rows
+        val icon = minOf(58.dp * prefs.iconSize / 100, cw - 12.dp, ch - if (prefs.labels) 28.dp else 6.dp)
+        page.items.forEach { c ->
+            key(c.key) {
+                Box(Modifier.offset(cw * c.x, ch * c.y).size(cw * c.w, ch * c.h), contentAlignment = Alignment.Center) {
+                    val id = c.widgetId
+                    if (id != null) WidgetView(widgets, id, cw * c.w - 8.dp, ch * c.h - 8.dp)
+                    else apps.byKey(c.key)?.let { AppTile(apps, it, if (prefs.labels) Fg else null, icon) }
+                }
             }
         }
     }
@@ -365,13 +441,18 @@ internal fun Clock() {
 }
 
 @Composable
-internal fun WidgetView(widgets: Widgets, id: Int) {
+internal fun WidgetView(widgets: Widgets, id: Int, width: Dp, height: Dp) {
     val info = remember(id) { widgets.manager.getAppWidgetInfo(id) } ?: return
-    val density = LocalContext.current.resources.displayMetrics.density
-    val height = maxOf(info.minHeight / density, 64f).dp
+    var view by remember { mutableStateOf<AppWidgetHostView?>(null) }
+    // Tell the widget how big it really is, so it can pick a layout that fits.
+    LaunchedEffect(view, width, height) {
+        val v = view ?: return@LaunchedEffect
+        if (Build.VERSION.SDK_INT >= 31) v.updateAppWidgetSize(Bundle(), listOf(SizeF(width.value, height.value)))
+        else @Suppress("DEPRECATION") v.updateAppWidgetSize(null, width.value.toInt(), height.value.toInt(), width.value.toInt(), height.value.toInt())
+    }
     AndroidView(
-        factory = { ctx -> widgets.host.createView(ctx, id, info).apply { setAppWidget(id, info) } },
-        modifier = Modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(24.dp)),
+        factory = { ctx -> widgets.host.createView(ctx, id, info).apply { setAppWidget(id, info); view = this } },
+        modifier = Modifier.size(width, height).clip(RoundedCornerShape(24.dp)),
     )
 }
 
@@ -596,7 +677,7 @@ internal fun AppPopup(apps: Apps, app: App, onDismiss: () -> Unit) {
                 }
                 if (shortcuts.isNotEmpty()) Box(Modifier.padding(6.dp).fillMaxWidth().height(1.dp).background(ChipLine))
                 Row(Modifier.fillMaxWidth()) {
-                    val onHome = app.key in apps.home
+                    val onHome = apps.onHome(app)
                     val onDock = app.key in apps.dock
                     PopupAction(Ic.info, "Info", Fg) { apps.appInfo(app); onDismiss() }
                     val context = LocalContext.current

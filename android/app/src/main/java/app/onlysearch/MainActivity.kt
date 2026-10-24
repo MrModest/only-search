@@ -5,6 +5,7 @@ import android.content.pm.LauncherApps
 import android.os.Bundle
 import android.os.UserHandle
 import android.graphics.Color
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -39,6 +40,14 @@ class MainActivity : ComponentActivity() {
         prefs = Prefs(this)
         apps = Apps(this)
         widgets = Widgets(this)
+        widgets.onBound = { id ->
+            val (w, h) = widgets.manager.getAppWidgetInfo(id)?.let { cells(it, resources.displayMetrics.density) } ?: (2 to 2)
+            if (!apps.addWidget(id, w, h)) {
+                widgets.remove(id)
+                Toast.makeText(this, "No room for this widget on the page", Toast.LENGTH_SHORT).show()
+            }
+        }
+        apps.pruneWidgets { widgets.manager.getAppWidgetInfo(it) != null }
         lifecycleScope.launch { apps.load() }
         lifecycleScope.launch { Soulver.init(applicationContext) }
         getSystemService(LauncherApps::class.java).registerCallback(packageCallback)
