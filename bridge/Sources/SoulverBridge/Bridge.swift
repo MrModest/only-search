@@ -23,10 +23,11 @@ private final class Rates: CurrencyRateProvider {
     func fetchRateInBackgroundFor(request: CurrencyRateRequest) async -> Decimal? { rateFor(request: request) }
 }
 nonisolated(unsafe) private let rates = Rates()
+// Custom unit names are case-sensitive, so lowercase symbols are listed too ("dot" is left out: it's a word).
 private let crypto: [String: [String]] = [
-    "BTC": ["BTC", "bitcoin", "bitcoins"], "ETH": ["ETH", "ether", "ethereum"], "SOL": ["SOL", "solana"], "XRP": ["XRP"],
-    "DOGE": ["DOGE", "dogecoin"], "ADA": ["ADA", "cardano"], "LTC": ["LTC", "litecoin"], "USDT": ["USDT", "tether"],
-    "BNB": ["BNB"], "DOT": ["DOT", "polkadot"],
+    "BTC": ["BTC", "btc", "bitcoin", "bitcoins", "Bitcoin"], "ETH": ["ETH", "eth", "ether", "ethereum", "Ethereum"],
+    "SOL": ["SOL", "sol", "solana"], "XRP": ["XRP", "xrp"], "DOGE": ["DOGE", "doge", "dogecoin"], "ADA": ["ADA", "ada", "cardano"],
+    "LTC": ["LTC", "ltc", "litecoin"], "USDT": ["USDT", "usdt", "tether"], "BNB": ["BNB", "bnb"], "DOT": ["DOT", "polkadot"],
 ]
 
 // The calculator's customization is fixed at creation, so a settings change builds a new one.
