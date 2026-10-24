@@ -49,7 +49,11 @@ class MainActivity : ComponentActivity() {
         }
         apps.pruneWidgets { widgets.manager.getAppWidgetInfo(it) != null }
         lifecycleScope.launch { apps.load() }
-        lifecycleScope.launch { Soulver.init(applicationContext) }
+        lifecycleScope.launch {
+            Soulver.init(applicationContext)
+            Soulver.setUnitSystem(prefs.unitSystem)
+            Soulver.refreshRates()
+        }
         getSystemService(LauncherApps::class.java).registerCallback(packageCallback)
         // "query" extra opens search pre-filled; used by the CI screenshot step and handy for testing.
         val query = intent.getStringExtra("query")
@@ -67,7 +71,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() { super.onStart(); widgets.host.startListening() }
     override fun onStop() { super.onStop(); runCatching { widgets.host.stopListening() }; stopTick.intValue++ }
-    override fun onResume() { super.onResume(); resumeTick.intValue++ }
+    override fun onResume() {
+        super.onResume(); resumeTick.intValue++
+        lifecycleScope.launch { Soulver.refreshRates() }
+    }
 
     override fun onDestroy() {
         getSystemService(LauncherApps::class.java).unregisterCallback(packageCallback)

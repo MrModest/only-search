@@ -35,6 +35,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import android.text.format.DateFormat
 import java.util.Date
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -74,6 +75,18 @@ class Prefs(context: Context) {
     var iconShape by P("set.iconShape", "squircle")
     var labels by P("set.labels", true)
     var lockLayout by P("set.lockLayout", false)
+
+    // Search & calculator
+    var calcMath by P("set.calcMath", true)
+    var calcUnits by P("set.calcUnits", true)
+    var calcCurrency by P("set.calcCurrency", true)
+    var calcDates by P("set.calcDates", true)
+    var calcFinance by P("set.calcFinance", true)
+    var calcNatural by P("set.calcNatural", true)
+    var computeTime by P("set.computeTime", false)
+    var homeCurrency by P("set.homeCurrency", runCatching { java.util.Currency.getInstance(java.util.Locale.getDefault()).currencyCode }.getOrDefault("USD"))
+    var unitSystem by P("set.unitSystem", when (java.util.Locale.getDefault().country) { "US", "LR", "MM" -> "customaryUS"; "GB" -> "imperial"; else -> "metric" })
+    var enterCopies by P("set.enterCopies", "answer")
 
     // Sources & ranking
     var srcContacts by P("set.srcContacts", true)
@@ -126,7 +139,8 @@ fun SettingsScreen(apps: Apps, start: String, onClose: () -> Unit) {
 }
 
 private fun settingsPages(apps: Apps): List<Page> = listOf(
-    Page("search", "Search", SIc.calc, true, "Search & calculator", { "Math, units, currency, time zones" }, "", null),
+    Page("search", "Search", SIc.calc, true, "Search & calculator", { "Math, units, currency, time zones" },
+        "calculator math units currency rates dates time zones finance natural language compute time home currency unit system metric imperial") { CalcSettings() },
     Page("sources", "Search", SIc.sources, true, "Sources & ranking",
         { (listOf("Apps") + listOfNotNull("contacts".takeIf { prefs.srcContacts }, "settings".takeIf { prefs.srcSettings }, "web".takeIf { prefs.srcWeb })).joinToString(", ") },
         "contacts people settings web engine google duckduckgo fuzzy frequent ranking") { SourcesSettings() },
@@ -433,6 +447,79 @@ private fun SourcesSettings() {
                     DropdownMenu(engines, { engines = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
                         listOf("Google", "DuckDuckGo", "Bing", "Startpage").forEach { e ->
                             DropdownMenuItem({ Text(e, color = if (e == prefs.engine) Accent else Fg) }, { prefs.engine = e; engines = false })
+                        }
+                    }
+                }
+            },
+        ))
+    }
+}
+
+internal val UnitSystems = listOf("metric" to "Metric", "imperial" to "Imperial (UK)", "customaryUS" to "US customary")
+internal val Currencies = listOf("USD" to "$", "EUR" to "€", "GBP" to "£", "JPY" to "¥", "CHF" to "CHF", "CAD" to "$", "AUD" to "$", "CNY" to "¥",
+    "INR" to "₹", "RUB" to "₽", "SEK" to "kr", "NOK" to "kr", "DKK" to "kr", "PLN" to "zł", "CZK" to "Kč", "TRY" to "₺", "BRL" to "R$", "MXN" to "$",
+    "KRW" to "₩", "SGD" to "$", "HKD" to "$", "NZD" to "$", "ZAR" to "R", "ILS" to "₪", "AED" to "د.إ", "UAH" to "₴", "KZT" to "₸", "GEL" to "₾", "AMD" to "֏")
+
+@Composable
+private fun CalcSettings() {
+    val scope = rememberCoroutineScope()
+    var preview by remember { mutableStateOf("") }
+    LaunchedEffect(prefs.unitSystem) { preview = Soulver.evaluate("\$48 + 15% tip") }
+    var currencies by remember { mutableStateOf(false) }
+    var systems by remember { mutableStateOf(false) }
+    var enter by remember { mutableStateOf(false) }
+    val ratesAt = prefs.sp.getLong("ratesAt", 0L)
+    Row(
+        Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 18.dp).clip(RoundedCornerShape(16.dp)).background(AccentCard)
+            .border(1.dp, AccentLine, RoundedCornerShape(16.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("\$48 + 15% tip", color = Color(0xFFD6DEE6), fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.weight(1f))
+        Text(preview, color = Accent, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Text("preview", color = Muted, fontSize = 10.sp, fontFamily = Mono)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Group("Understand queries", listOf(
+            { SwitchRow("Math & expressions", "(128*3.5)/4 + 12^2", prefs.calcMath, monoSubtitle = true) { prefs.calcMath = it } },
+            { SwitchRow("Units", "5 km in miles · 72 F in C", prefs.calcUnits, monoSubtitle = true) { prefs.calcUnits = it } },
+            {
+                SwitchRow("Currency", "rates refresh every 6 h" + if (ratesAt > 0) " · updated ${ago(ratesAt)}" else "", prefs.calcCurrency, monoSubtitle = true) { prefs.calcCurrency = it }
+            },
+            { SwitchRow("Dates & time zones", "today + 3 weeks · time in Tokyo", prefs.calcDates, monoSubtitle = true) { prefs.calcDates = it } },
+            { SwitchRow("Finance", "interest · tip · % of · % change", prefs.calcFinance, monoSubtitle = true) { prefs.calcFinance = it } },
+            { SwitchRow("Natural language", "\$10 for lunch + 15% tip", prefs.calcNatural, monoSubtitle = true) { prefs.calcNatural = it } },
+            { SwitchRow("Show compute time", "e.g. 16.5 ms in the header", prefs.computeTime, monoSubtitle = true) { prefs.computeTime = it } },
+        ))
+        Group("Defaults", listOf(
+            {
+                Box {
+                    ValueRow("Home currency", "${prefs.homeCurrency} ${Currencies.firstOrNull { it.first == prefs.homeCurrency }?.second.orEmpty()}".trim()) { currencies = true }
+                    DropdownMenu(currencies, { currencies = false }, Modifier.heightIn(max = 360.dp), shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
+                        Currencies.forEach { (code, sym) ->
+                            DropdownMenuItem({ Text("$code  $sym", color = if (code == prefs.homeCurrency) Accent else Fg) }, { prefs.homeCurrency = code; currencies = false })
+                        }
+                    }
+                }
+            },
+            {
+                Box {
+                    ValueRow("Unit system", UnitSystems.first { it.first == prefs.unitSystem }.second) { systems = true }
+                    DropdownMenu(systems, { systems = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
+                        UnitSystems.forEach { (id, name) ->
+                            DropdownMenuItem({ Text(name, color = if (id == prefs.unitSystem) Accent else Fg) }, {
+                                prefs.unitSystem = id; systems = false
+                                scope.launch { Soulver.setUnitSystem(id) }
+                            })
+                        }
+                    }
+                }
+            },
+            {
+                Box {
+                    ValueRow("↵ on a result", if (prefs.enterCopies == "both") "Copy expression = answer" else "Copy answer") { enter = true }
+                    DropdownMenu(enter, { enter = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
+                        listOf("answer" to "Copy answer", "both" to "Copy expression = answer").forEach { (id, name) ->
+                            DropdownMenuItem({ Text(name, color = if (id == prefs.enterCopies) Accent else Fg) }, { prefs.enterCopies = id; enter = false })
                         }
                     }
                 }

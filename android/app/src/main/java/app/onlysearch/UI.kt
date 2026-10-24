@@ -1206,7 +1206,7 @@ private fun GroupTab(name: String, on: Boolean, onLongClick: (() -> Unit)? = nul
 
 // ---------- Search + calculator ----------
 
-internal data class Calc(val expression: String, val result: String, val micros: Long)
+internal data class Calc(val expression: String, val result: String, val micros: Long, val home: String? = null)
 
 internal val Examples = listOf("20% of 450", "5 km in mi", "time in Tokyo", "\$48 + 15% tip", "3:45pm + 4h 10m", "sqrt(2)^8")
 
@@ -1222,7 +1222,9 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
             val t0 = System.nanoTime()
             val r = Soulver.evaluate(q)
             val us = (System.nanoTime() - t0) / 1000
-            calc = if (r.isBlank() || r == q.trim()) null else Calc(q.trim(), r, us)
+            // Hidden when the query is a kind the user switched off in Settings › Search & calculator.
+            calc = if (r.isBlank() || r == q.trim() || !calcAllowed(q)) null
+            else Calc(q.trim(), r, us, homeCurrencyQuery(q.trim())?.let { Soulver.evaluate(it) }?.takeIf { it.isNotBlank() && it != r })
         }
     }
     val (matches, matchMicros) = remember(query, apps.all.toList(), apps.hidden.size) {
@@ -1238,8 +1240,9 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
     val rest = matches.drop(if (top != null) 1 else 0).map { it.first }.take(8)
     val shortcuts = remember(top?.first?.key) { top?.let { apps.shortcuts(it.first).take(3) }.orEmpty() }
     val copy = { c: Calc ->
-        clipboard.setText(AnnotatedString(c.result)); apps.remember(c.expression, c.result)
-        Toast.makeText(context, "Copied ${c.result}", Toast.LENGTH_SHORT).show()
+        val text = if (prefs.enterCopies == "both") "${c.expression} = ${c.result}" else c.result
+        clipboard.setText(AnnotatedString(text)); apps.remember(c.expression, c.result)
+        Toast.makeText(context, "Copied $text", Toast.LENGTH_SHORT).show()
     }
     val go = {
         when {
@@ -1314,7 +1317,7 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
                     Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(Modifier.padding(horizontal = 4.dp)) {
                             Label("Calculator", Modifier.weight(1f))
-                            Text("%.1f ms".format(c.micros / 1000.0), color = Muted, fontSize = 11.sp, fontFamily = Mono)
+                            if (prefs.computeTime) Text("%.1f ms".format(c.micros / 1000.0), color = Muted, fontSize = 11.sp, fontFamily = Mono)
                         }
                         CalcCard(c) { copy(c) }
                     }
@@ -1487,6 +1490,7 @@ internal fun CalcCard(c: Calc, onCopy: () -> Unit) {
         val big = c.result.length <= 13
         Text(c.result, color = Accent, fontSize = if (big) 40.sp else 26.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.03).em,
             lineHeight = if (big) 46.sp else 31.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
+        if (c.home != null) Text("≈ ${c.home}", color = Muted, fontSize = 15.sp, fontFamily = Mono, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
     }
 }
 

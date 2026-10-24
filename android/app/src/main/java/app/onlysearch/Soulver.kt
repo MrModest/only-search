@@ -8,6 +8,10 @@ import java.util.TimeZone
 import java.util.concurrent.Executors
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 /** SoulverCore over JNI. Every native call runs on one thread, the Swift side keeps no locks. */
 object Soulver {
@@ -18,6 +22,8 @@ object Soulver {
 
     private external fun nativeInit(resourcesPath: String, locale: String): Boolean
     private external fun nativeEval(expression: String): String?
+    private external fun nativeSetUnitSystem(system: String)
+    private external fun nativeSetRates(rates: String)
 
     /** Blocking; call off the main thread or through [evaluate]. */
     fun initBlocking(context: Context): Boolean {
@@ -38,6 +44,47 @@ object Soulver {
     suspend fun init(context: Context) = withContext(thread) { initBlocking(context) }
 
     suspend fun evaluate(expression: String): String = withContext(thread) { evalBlocking(expression) }
+
+    // A bridge library older than these calls (e.g. a local build with CI-extracted libs) just keeps the defaults.
+    suspend fun setUnitSystem(system: String) = withContext(thread) { if (ready) runCatching { nativeSetUnitSystem(system) } }
+
+    suspend fun setRates(rates: String) = withContext(thread) { if (ready) runCatching { nativeSetRates(rates) } }
+
+    /**
+     * Live fiat (open.er-api.com) and crypto (CoinGecko) rates, refetched when older than 6 h. The last good set is kept,
+     * so an offline start still uses recent rates; with none at all SoulverCore's built-in standard rates apply.
+     */
+    suspend fun refreshRates() {
+        val sp = prefs.sp
+        var data = sp.getString("rates", null)
+        if (data == null || System.currentTimeMillis() - sp.getLong("ratesAt", 0) > 6 * 3_600_000L) {
+            withContext(Dispatchers.IO) { runCatching { fetchRates() } }.getOrNull()?.let {
+                data = it
+                sp.edit().putString("rates", it).putLong("ratesAt", System.currentTimeMillis()).apply()
+            }
+        }
+        data?.let { setRates(it) }
+    }
+
+    private val Crypto = mapOf(
+        "bitcoin" to "BTC", "ethereum" to "ETH", "solana" to "SOL", "ripple" to "XRP", "dogecoin" to "DOGE",
+        "cardano" to "ADA", "litecoin" to "LTC", "tether" to "USDT", "binancecoin" to "BNB", "polkadot" to "DOT",
+    )
+
+    private fun get(url: String): String = (URL(url).openConnection() as HttpURLConnection).run {
+        connectTimeout = 8000; readTimeout = 8000
+        try { inputStream.bufferedReader().readText() } finally { disconnect() }
+    }
+
+    private fun fetchRates(): String {
+        val fiat = JSONObject(get("https://open.er-api.com/v6/latest/USD")).getJSONObject("rates")
+        val perUsd = fiat.keys().asSequence().associateWith { fiat.getDouble(it) }.toMutableMap()
+        runCatching {
+            val c = JSONObject(get("https://api.coingecko.com/api/v3/simple/price?vs_currencies=usd&ids=" + Crypto.keys.joinToString(",")))
+            Crypto.forEach { (id, code) -> c.optJSONObject(id)?.optDouble("usd")?.takeIf { it > 0 }?.let { perUsd[code] = 1 / it } }
+        }
+        return perUsd.entries.joinToString(";") { "${it.key}=${it.value.toBigDecimal().toPlainString()}" }
+    }
 
     // The engine reads its resources bundle from a real directory, so unpack it from assets once per install/update.
     private fun copyResources(context: Context): File {

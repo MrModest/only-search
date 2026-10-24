@@ -5,6 +5,30 @@ import SoulverCore
 
 // Kotlin calls in from a single background thread (Soulver.kt), so no locking.
 nonisolated(unsafe) private var calculator: Calculator?
+nonisolated(unsafe) private var base: EngineCustomization?
+nonisolated(unsafe) private var unitSystem = UnitMeasurementSystem.metric
+
+/** Live rates fetched by the app (units of each currency per 1 USD). Unknown codes return nil. */
+private final class Rates: CurrencyRateProvider {
+    var perUSD: [String: Decimal] = [:]
+    func rateFor(request: CurrencyRateRequest) -> Decimal? {
+        guard let from = perUSD[request.fromCurrency.uppercased()], let to = perUSD[request.toCurrency.uppercased()], from != 0 else { return nil }
+        return to / from
+    }
+}
+nonisolated(unsafe) private let rates = Rates()
+
+// The calculator's customization is fixed at creation, so a settings change builds a new one.
+private func rebuild() {
+    guard var c = base else { return }
+    c.unitSystem = unitSystem
+    if !rates.perUSD.isEmpty { c.currencyRateProvider = rates }
+    let calc = Calculator(customization: c)
+    var formatting = FormattingPreferences()
+    formatting.dp = 2
+    calc.formattingPreferences = formatting
+    calculator = calc
+}
 
 private func swiftString(_ env: UnsafeMutablePointer<JNIEnv?>, _ s: jstring?) -> String {
     guard let s, let fn = env.pointee?.pointee else { return "" }
@@ -35,13 +59,28 @@ public func nativeInit(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ p
     let url = URL(fileURLWithPath: swiftString(env, path))
     guard overrideProcessPath(inside: url.deletingLastPathComponent().path) else { return 0 }
     guard let bundle = ResourceBundle(url: url) else { return 0 }
-    let customization = EngineCustomization(resourcesBundle: bundle, locale: Locale(identifier: swiftString(env, locale)))
-    let calc = Calculator(customization: customization)
-    var formatting = FormattingPreferences()
-    formatting.dp = 2
-    calc.formattingPreferences = formatting
-    calculator = calc
+    base = EngineCustomization(resourcesBundle: bundle, locale: Locale(identifier: swiftString(env, locale)))
+    rebuild()
     return 1
+}
+
+/** "metric", "imperial" or "customaryUS". */
+@_cdecl("Java_app_onlysearch_Soulver_nativeSetUnitSystem")
+public func nativeSetUnitSystem(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ system: jstring?) {
+    unitSystem = UnitMeasurementSystem(rawValue: swiftString(env, system)) ?? .metric
+    rebuild()
+}
+
+/** "USD=1;EUR=0.92;BTC=0.0000094;…": units of each currency per 1 USD. */
+@_cdecl("Java_app_onlysearch_Soulver_nativeSetRates")
+public func nativeSetRates(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ data: jstring?) {
+    var parsed: [String: Decimal] = [:]
+    for pair in swiftString(env, data).split(separator: ";") {
+        let kv = pair.split(separator: "=", maxSplits: 1)
+        if kv.count == 2, let v = Decimal(string: String(kv[1])) { parsed[String(kv[0]).uppercased()] = v }
+    }
+    rates.perUSD = parsed
+    rebuild()
 }
 
 @_cdecl("Java_app_onlysearch_Soulver_nativeEval")

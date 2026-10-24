@@ -122,3 +122,45 @@ fun ago(millis: Long, now: Long = System.currentTimeMillis()): String {
     }
 }
 
+
+private val CurrencyRx = Regex("""[$€£¥₹₽₩₺₴₸₾₪฿]|\b(usd|eur|gbp|jpy|chf|cad|aud|cny|inr|rub|sek|nok|dkk|pln|czk|try|brl|mxn|krw|sgd|hkd|nzd|zar|uah|btc|eth|sol|xrp|doge|dollars?|euros?|pounds?|yen|rubles?|bitcoins?)\b""", RegexOption.IGNORE_CASE)
+private val DateRx = Regex("""\b(today|tomorrow|yesterday|now|time|am|pm|days?|weeks?|months?|years?|hours?|minutes?|seconds?|mins?|hrs?|h|m|monday|tuesday|wednesday|thursday|friday|saturday|sunday|jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|june?|july?|aug(ust)?|sep(tember)?|oct(ober)?|nov(ember)?|dec(ember)?|utc|gmt|est|pst|cet)\b|\d:\d\d""", RegexOption.IGNORE_CASE)
+private val FinanceRx = Regex("""%|\b(tip|interest|compound(ed)?|tax|discount|off|percent|loan|mortgage|apr|roi)\b""", RegexOption.IGNORE_CASE)
+private val UnitRx = Regex("""\d\s*(km|m|cm|mm|mi|miles?|ft|feet|foot|in|inch(es)?|yd|yards?|kg|g|mg|lb|lbs|oz|ounces?|stone|st|l|ml|liters?|litres?|gal|gallons?|cups?|tbsp|tsp|mph|kph|km/h|kb|mb|gb|tb|°|c|f|celsius|fahrenheit|kelvin|kw|w|kwh|hz|ghz|pa|psi|bar|acres?|ha)\b|\b(in|to)\s+(km|m|cm|mi|miles|ft|feet|inches|kg|g|lb|lbs|oz|liters|gallons|c|f|celsius|fahrenheit)\b""", RegexOption.IGNORE_CASE)
+private val WordRx = Regex("""[a-z]{3,}""", RegexOption.IGNORE_CASE)
+private val MathWords = setOf("sqrt", "sin", "cos", "tan", "log", "ln", "abs", "round", "floor", "ceil", "pi", "mod", "and", "or", "xor", "of", "in", "to", "as", "sum", "avg", "average", "min", "max")
+
+/** Which kinds of calculation a query looks like; used to honour the "Understand queries" switches. */
+fun calcKinds(q: String): Set<String> {
+    val kinds = mutableSetOf<String>()
+    if (CurrencyRx.containsMatchIn(q)) kinds += "currency"
+    if (DateRx.containsMatchIn(q)) kinds += "dates"
+    if (FinanceRx.containsMatchIn(q)) kinds += "finance"
+    if (UnitRx.containsMatchIn(q)) kinds += "units"
+    // Words that none of the patterns above know are natural language ("$10 for lunch").
+    val known = listOf(CurrencyRx, DateRx, FinanceRx, UnitRx)
+    // Capitalised words are usually places ("time in Tokyo"), not prose.
+    if (WordRx.findAll(q).any { w ->
+            !w.value[0].isUpperCase() && w.value.lowercase() !in MathWords && known.none { it.containsMatchIn(w.value) || it.containsMatchIn("1${w.value}") }
+        }) kinds += "natural"
+    if (kinds.isEmpty()) kinds += "math"
+    return kinds
+}
+
+fun calcAllowed(q: String): Boolean = calcKinds(q).all {
+    when (it) {
+        "currency" -> prefs.calcCurrency
+        "dates" -> prefs.calcDates
+        "finance" -> prefs.calcFinance
+        "units" -> prefs.calcUnits
+        "natural" -> prefs.calcNatural
+        else -> prefs.calcMath
+    }
+}
+
+/** A currency amount with no target ("100 USD", "$20 + 5%"): also show it in the home currency. */
+fun homeCurrencyQuery(q: String): String? {
+    if (!CurrencyRx.containsMatchIn(q) || Regex("""\b(in|to|as)\b""", RegexOption.IGNORE_CASE).containsMatchIn(q)) return null
+    if (q.contains(prefs.homeCurrency, ignoreCase = true)) return null
+    return "$q in ${prefs.homeCurrency}"
+}
