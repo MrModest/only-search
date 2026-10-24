@@ -67,6 +67,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -326,9 +327,10 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, actions: HomeActions) {
         Spacer(Modifier.height(30.dp))
         widgets.ids.forEach { id -> WidgetView(widgets, id); Spacer(Modifier.height(10.dp)) }
         Spacer(Modifier.weight(1f))
-        AppGrid(apps, apps.home.mapNotNull(apps::byKey), size = 58.dp)
+        val iconSize = 58.dp * prefs.iconSize / 100
+        AppGrid(apps, apps.home.mapNotNull(apps::byKey), size = iconSize, labelColor = if (prefs.labels) Fg else null, columns = prefs.columns)
         Spacer(Modifier.height(22.dp))
-        AppGrid(apps, apps.dock.mapNotNull(apps::byKey), size = 58.dp, labelColor = null)
+        AppGrid(apps, apps.dock.mapNotNull(apps::byKey), size = iconSize, labelColor = null)
         Spacer(Modifier.height(16.dp))
         Pill("Apps, math, units, time…", Modifier.testTag("homeSearch"), onClick = actions.onSearch) { MicButton(actions.onVoice) }
         DropdownMenu(menu, { menu = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
@@ -535,11 +537,20 @@ internal fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifie
     }
 }
 
-/** Soft-square icon (corner = a third of the side); [ring] marks the long-pressed one. */
+internal val IconShapes = listOf("squircle", "circle", "square", "teardrop")
+
+internal fun iconShape(name: String, size: Dp): Shape = when (name) {
+    "circle" -> CircleShape
+    "square" -> RoundedCornerShape(size / 7)
+    "teardrop" -> RoundedCornerShape(50, 50, 14, 50)
+    else -> RoundedCornerShape(size / 3)
+}
+
+/** App icon in the chosen shape (default: soft square, corner = a third of the side); [ring] marks the long-pressed one. */
 @Composable
 internal fun AppIcon(apps: Apps, app: App, size: Dp, modifier: Modifier = Modifier, ring: Boolean = false) {
     val bmp = apps.icons[app.key]
-    val shape = RoundedCornerShape(size / 3)
+    val shape = iconShape(prefs.iconShape, size)
     val m = modifier.size(size).then(if (ring) Modifier.border(2.dp, Accent, shape) else Modifier).clip(shape)
     if (bmp != null) Image(bmp, app.label, m) else Box(m.background(Tile).border(1.dp, TileLine, shape))
 }
@@ -588,8 +599,13 @@ internal fun AppPopup(apps: Apps, app: App, onDismiss: () -> Unit) {
                     val onHome = app.key in apps.home
                     val onDock = app.key in apps.dock
                     PopupAction(Ic.info, "Info", Fg) { apps.appInfo(app); onDismiss() }
-                    PopupAction(Ic.home, if (onHome) "Unpin" else "Home", if (onHome) Accent else Fg) { apps.toggleHome(app); onDismiss() }
-                    PopupAction(Ic.dock, if (onDock) "Undock" else "Dock", if (onDock) Accent else Fg) { apps.toggleDock(app); onDismiss() }
+                    val context = LocalContext.current
+                    fun unlocked(action: () -> Unit) {
+                        if (prefs.lockLayout) Toast.makeText(context, "Layout is locked (Settings › Home screen)", Toast.LENGTH_SHORT).show() else action()
+                        onDismiss()
+                    }
+                    PopupAction(Ic.home, if (onHome) "Unpin" else "Home", if (onHome) Accent else Fg) { unlocked { apps.toggleHome(app) } }
+                    PopupAction(Ic.dock, if (onDock) "Undock" else "Dock", if (onDock) Accent else Fg) { unlocked { apps.toggleDock(app) } }
                     PopupAction(Ic.uninstall, "Uninstall", Danger) { apps.uninstall(app); onDismiss() }
                 }
             }

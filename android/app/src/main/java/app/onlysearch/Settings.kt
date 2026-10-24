@@ -20,6 +20,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import android.text.format.DateFormat
+import java.util.Date
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -51,6 +61,14 @@ class Prefs(context: Context) {
             }
         }
     }
+
+    // Home screen
+    var columns by P("set.columns", 4)
+    var rows by P("set.rows", 6)
+    var iconSize by P("set.iconSize", 100)
+    var iconShape by P("set.iconShape", "squircle")
+    var labels by P("set.labels", true)
+    var lockLayout by P("set.lockLayout", false)
 }
 
 lateinit var prefs: Prefs
@@ -90,7 +108,8 @@ fun SettingsScreen(apps: Apps, start: String, onClose: () -> Unit) {
 private fun settingsPages(apps: Apps): List<Page> = listOf(
     Page("search", "Search", SIc.calc, true, "Search & calculator", { "Math, units, currency, time zones" }, "", null),
     Page("sources", "Search", SIc.sources, true, "Sources & ranking", { "Apps, contacts, settings, web" }, "", null),
-    Page("home", "Layout", SIc.home, false, "Home screen", { "Grid 4 × 6 · icons 100%" }, "", null),
+    Page("home", "Layout", SIc.home, false, "Home screen", { "Grid ${prefs.columns} × ${prefs.rows} · icons ${prefs.iconSize}%" },
+        "columns rows grid icon size shape labels lock layout") { HomeSettings() },
     Page("dock", "Layout", SIc.dock, false, "Dock & search bar", { "4 icons · search bar at bottom" }, "", null),
     Page("drawer", "Layout", SIc.drawer, false, "App drawer & folders", { "Vertical · A–Z scrubber" }, "", null),
     Page("gestures", "Behaviour", SIc.gestures, false, "Gestures", { "Swipe up: app drawer" }, "", null),
@@ -229,4 +248,96 @@ internal fun ValueRow(title: String, value: String, valueColor: Color = Accent, 
         Text(value, color = valueColor, fontSize = if (icon != null) 13.sp else 14.sp, maxLines = 1)
         Icon(SIc.next, null, tint = Dim, modifier = Modifier.size(16.dp))
     }
+}
+
+// ---------- Pages ----------
+
+@Composable
+private fun HomeSettings() {
+    HomePreview()
+    Group(null, listOf(
+        { Stepper("Columns", prefs.columns, 3..6) { prefs.columns = it } },
+        { Stepper("Rows", prefs.rows, 1..8) { prefs.rows = it } },
+        {
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row {
+                    Text("Icon size", fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    Text("${prefs.iconSize}%", color = Accent, fontSize = 13.sp, fontFamily = Mono)
+                }
+                Slider(
+                    prefs.iconSize.toFloat(), { prefs.iconSize = (it / 5).roundToInt() * 5 }, valueRange = 70f..130f, steps = 11,
+                    colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent, inactiveTrackColor = Color(0xFF3A3D45),
+                        activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent),
+                )
+            }
+        },
+        {
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Icon shape", fontSize = 15.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconShapes.forEach { name ->
+                        val on = prefs.iconShape == name
+                        Box(
+                            Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(14.dp)).background(if (on) AccentCard else Color.Transparent)
+                                .border(if (on) 1.5.dp else 1.dp, if (on) Accent else ChipLine, RoundedCornerShape(14.dp))
+                                .clickable { prefs.iconShape = name }.semantics { contentDescription = name },
+                            contentAlignment = Alignment.Center,
+                        ) { Box(Modifier.size(28.dp).clip(iconShape(name, 28.dp)).background(if (on) Accent else Color(0xFF6B6E76))) }
+                    }
+                }
+            }
+        },
+        { SwitchRow("Show labels", null, prefs.labels) { prefs.labels = it } },
+        { SwitchRow("Lock layout", "Prevent accidental moves", prefs.lockLayout) { prefs.lockLayout = it } },
+    ))
+}
+
+/** Small live model of the home screen: clock, the icon grid at the chosen size and shape, search bar. */
+@Composable
+private fun HomePreview() {
+    val dot = Color(0xFF24262C)
+    Column(
+        Modifier.fillMaxWidth().wrapContentWidth().padding(top = 0.dp, bottom = 18.dp).size(170.dp, 250.dp)
+            .clip(RoundedCornerShape(22.dp)).background(Sheet).border(1.dp, PillLine, RoundedCornerShape(22.dp))
+            .drawBehind {
+                val step = 10.dp.toPx()
+                var y = step / 2
+                while (y < size.height) { var x = step / 2; while (x < size.width) { drawCircle(dot, 1.dp.toPx(), Offset(x, y)); x += step }; y += step }
+            }
+            .padding(start = 12.dp, end = 12.dp, top = 18.dp, bottom = 12.dp)
+    ) {
+        Text(DateFormat.format("h:mm", Date()).toString(), fontSize = 30.sp, fontWeight = FontWeight.Light, letterSpacing = (-0.04).em)
+        Spacer(Modifier.weight(1f))
+        val cell = 26.dp * prefs.iconSize / 100 * 4 / maxOf(4, prefs.columns)
+        Column(verticalArrangement = Arrangement.spacedBy(if (prefs.labels) 8.dp else 5.dp)) {
+            repeat(minOf(prefs.rows, 4)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    repeat(prefs.columns) {
+                        Box(Modifier.size(cell).clip(iconShape(prefs.iconShape, cell)).background(Color(0xFF23262C))
+                            .border(1.dp, PillLine, iconShape(prefs.iconShape, cell)))
+                    }
+                }
+            }
+        }
+        Box(Modifier.padding(top = 12.dp).fillMaxWidth().height(20.dp).clip(CircleShape).background(Color(0xFF23262C)))
+    }
+}
+
+@Composable
+private fun Stepper(title: String, value: Int, range: IntRange, onChange: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 14.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        StepButton("−", "Fewer ${title.lowercase()}", value > range.first) { onChange(value - 1) }
+        Text("$value", color = Accent, fontSize = 15.sp, fontFamily = Mono, textAlign = TextAlign.Center, modifier = Modifier.width(40.dp))
+        StepButton("+", "More ${title.lowercase()}", value < range.last) { onChange(value + 1) }
+    }
+}
+
+@Composable
+private fun StepButton(text: String, label: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF23262C)).border(1.dp, PillLine, RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, onClick = onClick).semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) { Text(text, fontSize = 18.sp, color = if (enabled) Fg else Dim) }
 }

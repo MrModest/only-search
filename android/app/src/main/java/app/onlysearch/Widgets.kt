@@ -13,9 +13,9 @@ import androidx.core.content.edit
 class Widgets(private val activity: Activity) {
     val host = AppWidgetHost(activity, 1024)
     val manager: AppWidgetManager = AppWidgetManager.getInstance(activity)
-    private val prefs = activity.getSharedPreferences("launcher", Context.MODE_PRIVATE)
+    private val sp = activity.getSharedPreferences("launcher", Context.MODE_PRIVATE)
     val ids = mutableStateListOf<Int>().apply {
-        addAll(prefs.getString("widgets", "")!!.split(",").mapNotNull { it.toIntOrNull() })
+        addAll(sp.getString("widgets", "")!!.split(",").mapNotNull { it.toIntOrNull() })
         removeAll { manager.getAppWidgetInfo(it) == null }
     }
     private var pending = -1
@@ -61,7 +61,7 @@ class Widgets(private val activity: Activity) {
     }
 
     private fun commit(id: Int) { ids.add(id); save() }
-    private fun save() = prefs.edit { putString("widgets", ids.joinToString(",")) }
+    private fun save() = sp.edit { putString("widgets", ids.joinToString(",")) }
 
     companion object {
         const val REQ_BIND = 11

@@ -42,16 +42,16 @@ data class Shortcut(val label: String, val app: App, val info: ShortcutInfo)
 /** Installed apps, icons, and the user's pins / launch counts. All state is Compose-observable. */
 class Apps(private val context: Context) {
     private val launcher = context.getSystemService(LauncherApps::class.java)
-    private val prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
+    private val sp = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
 
     val all = mutableStateListOf<App>()
     val icons = mutableStateMapOf<String, ImageBitmap>()
-    val home = mutableStateListOf<String>().apply { addAll(prefs.list("home")) }
-    val dock = mutableStateListOf<String>().apply { addAll(prefs.list("dock")) }
+    val home = mutableStateListOf<String>().apply { addAll(sp.list("home")) }
+    val dock = mutableStateListOf<String>().apply { addAll(sp.list("dock")) }
     val history = mutableStateListOf<Pair<String, String>>().apply {
-        addAll(prefs.list("history").mapNotNull { it.split('\t').takeIf { p -> p.size == 2 }?.let { p -> p[0] to p[1] } })
+        addAll(sp.list("history").mapNotNull { it.split('\t').takeIf { p -> p.size == 2 }?.let { p -> p[0] to p[1] } })
     }
-    val recent = mutableStateListOf<String>().apply { addAll(prefs.list("recent")) }
+    val recent = mutableStateListOf<String>().apply { addAll(sp.list("recent")) }
     private val counts = mutableStateMapOf<String, Int>()
     val loaded = mutableStateOf(false)
 
@@ -68,9 +68,9 @@ class Apps(private val context: Context) {
             apps to apps.filter { it.first.key !in icons }.associate { (app, info) -> app.key to squareIcon(info.getIcon(0), size) }
         }
         icons.putAll(newIcons)
-        prefs.all.forEach { (k, v) -> if (k.startsWith("count:") && v is Int) counts[k.removePrefix("count:")] = v }
+        sp.all.forEach { (k, v) -> if (k.startsWith("count:") && v is Int) counts[k.removePrefix("count:")] = v }
         all.clear(); all.addAll(apps.map { it.first })
-        if (dock.isEmpty() && home.isEmpty() && !prefs.getBoolean("seeded", false)) seedDefaults()
+        if (dock.isEmpty() && home.isEmpty() && !sp.getBoolean("seeded", false)) seedDefaults()
         loaded.value = true
     }
 
@@ -83,26 +83,26 @@ class Apps(private val context: Context) {
         counts[app.key] = (counts[app.key] ?: 0) + 1
         recent.remove(app.key); recent.add(0, app.key)
         while (recent.size > 5) recent.removeAt(recent.lastIndex)
-        prefs.edit { putInt("count:${app.key}", counts[app.key]!!); putString("recent", recent.joinToString("\n")) }
+        sp.edit { putInt("count:${app.key}", counts[app.key]!!); putString("recent", recent.joinToString("\n")) }
         returningFromApp = true
         launcher.startMainActivity(app.component, app.user, from?.bounds, from?.options())
     }
 
     fun toggle(list: MutableList<String>, name: String, app: App, max: Int) {
         if (!list.remove(app.key) && list.size < max) list.add(app.key)
-        prefs.edit { putString(name, list.joinToString("\n")) }
+        sp.edit { putString(name, list.joinToString("\n")) }
     }
-    fun toggleHome(app: App) = toggle(home, "home", app, 8)
+    fun toggleHome(app: App) = toggle(home, "home", app, prefs.columns * prefs.rows)
     fun toggleDock(app: App) = toggle(dock, "dock", app, 4)
 
     fun remember(expression: String, result: String) {
         history.removeAll { it.first == expression }
         history.add(0, expression to result)
         while (history.size > 20) history.removeAt(history.lastIndex)
-        prefs.edit { putString("history", history.joinToString("\n") { "${it.first}\t${it.second}" }) }
+        sp.edit { putString("history", history.joinToString("\n") { "${it.first}\t${it.second}" }) }
     }
 
-    fun clearHistory() { history.clear(); prefs.edit { remove("history") } }
+    fun clearHistory() { history.clear(); sp.edit { remove("history") } }
 
     fun shortcuts(app: App): List<Shortcut> {
         if (!launcher.hasShortcutHostPermission()) return emptyList()
@@ -142,7 +142,7 @@ class Apps(private val context: Context) {
         ).mapNotNull { pm.resolveActivity(it, 0)?.activityInfo?.packageName }
             .mapNotNull { pkg -> all.firstOrNull { it.component.packageName == pkg && it.user == Process.myUserHandle() } }
             .distinct().forEach { dock.add(it.key) }
-        prefs.edit { putString("dock", dock.joinToString("\n")); putBoolean("seeded", true) }
+        sp.edit { putString("dock", dock.joinToString("\n")); putBoolean("seeded", true) }
     }
 
     private fun android.content.SharedPreferences.list(name: String) =
