@@ -69,7 +69,7 @@ fun openCalendar(context: Context, at: Long = System.currentTimeMillis()) = runC
     context.startActivity(Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(Uri.parse("content://com.android.calendar/time"), at)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
-private fun hm(context: Context, t: Long) = DateFormat.format(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm", Date(t)).toString()
+private fun hm(context: Context, t: Long) = DateFormat.format(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm a", Date(t)).toString()
 
 /** "Standup at 9:30", "Standup now", under the clock. */
 @Composable
@@ -79,8 +79,8 @@ fun NextEventLine(events: List<Event>) {
     val next = events.firstOrNull { !it.allDay } ?: return
     Row(Modifier.padding(start = 8.dp, top = 4.dp).clip(RoundedCornerShape(10.dp)).clickable { openCalendar(context, next.begin) }.padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(AIc.calendar, null, tint = Muted, modifier = Modifier.size(16.dp))
-        Text(if (next.begin <= now) "${next.title} now" else "${next.title} at ${hm(context, next.begin)}", color = Muted, fontSize = 15.sp,
+        Icon(AIc.calendar, null, tint = Color(0xFFD9D5CD), modifier = Modifier.size(16.dp))
+        Text(if (next.begin <= now) "${next.title} now" else "${next.title} at ${hm(context, next.begin)}", color = Color(0xFFD9D5CD), fontSize = 15.sp,
             style = shadowed(), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -98,7 +98,7 @@ fun TodayCard(events: List<Event>, modifier: Modifier = Modifier) {
         events.take(4).forEach { e ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (e.allDay) "all day" else hm(context, e.begin), color = if (e == firstTimed) Accent else Muted, fontSize = 13.sp, fontFamily = Mono,
-                    letterSpacing = 0.02.em, modifier = Modifier.width(52.dp))
+                    letterSpacing = 0.02.em, maxLines = 1, modifier = Modifier.width(if (DateFormat.is24HourFormat(context)) 52.dp else 72.dp))
                 Text(e.title, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (!e.allDay && e.end < now) Dim else Fg)
             }
         }

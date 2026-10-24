@@ -1456,7 +1456,7 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
         val counted = "$total ${if (total == 1) "result" else "results"} · %.0f ms".format(matchMicros / 1000.0)
         val (left, right) = when {
             query.isBlank() -> "↵ open top hit" to "long-press for actions"
-            c != null -> "↵ copy answer" to "long-press app for actions"
+            c != null -> (if (prefs.enterCopies == "both") "↵ copy expression = answer" else "↵ copy answer") to "long-press app for actions"
             top != null -> "↵ open ${top.first.label}" to counted
             total > 0 -> "" to counted
             else -> "no matches" to ""

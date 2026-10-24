@@ -100,15 +100,14 @@ internal fun LockPrompt(onClose: () -> Unit) {
                 Text("Lock the screen with a gesture?", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 Text("Android only lets a launcher lock the screen through an accessibility service. Turn on “Only Search: lock screen gesture” in the next screen. It reads nothing on screen.",
                     color = Muted, fontSize = 14.sp, lineHeight = 20.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Turn gesture off", color = Muted, fontSize = 13.sp, modifier = Modifier.clip(CircleShape).clickable {
-                        Gestures.filter { gesture(it.first) == "lock" }.forEach { prefs.setGesture(it.first, "none") }; onClose()
-                    }.padding(horizontal = 8.dp, vertical = 8.dp))
-                    Spacer(Modifier.weight(1f))
-                    Text("Not now", color = Muted, fontSize = 13.sp, modifier = Modifier.clip(CircleShape).clickable(onClick = onClose).padding(8.dp))
-                    Box(Modifier.height(38.dp).clip(CircleShape).background(Accent).clickable { openAccessibilitySettings(context); onClose() }.padding(horizontal = 16.dp),
-                        contentAlignment = Alignment.Center) { Text("Turn on", color = OnAccent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Not now", color = Muted, fontSize = 14.sp, maxLines = 1, modifier = Modifier.clip(CircleShape).clickable(onClick = onClose).padding(10.dp))
+                    Box(Modifier.height(40.dp).clip(CircleShape).background(Accent).clickable { openAccessibilitySettings(context); onClose() }.padding(horizontal = 18.dp),
+                        contentAlignment = Alignment.Center) { Text("Turn on", color = OnAccent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
                 }
+                Text("Turn the gesture off instead", color = Dim, fontSize = 13.sp, modifier = Modifier.clip(CircleShape).clickable {
+                    Gestures.filter { gesture(it.first) == "lock" }.forEach { prefs.setGesture(it.first, "none") }; onClose()
+                }.padding(vertical = 6.dp))
             }
         }
     }
