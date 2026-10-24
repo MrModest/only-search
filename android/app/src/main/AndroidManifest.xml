@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
     <!-- Optional: People results in search. Asked for only when the user taps "Allow" there. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Optional: next event / Today card on home. Asked for only when one of them is switched on. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
 
     <queries>
         <intent>

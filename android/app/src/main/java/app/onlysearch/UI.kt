@@ -486,6 +486,7 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
     LaunchedEffect(prefs.columns, prefs.rows) { apps.fitGrid() }
     LaunchedEffect(pager.currentPage) { selected = null }
     var menuAt by remember { mutableStateOf(IntOffset.Zero) }
+    val events = rememberEvents()
     // Swipes: "Swipe up" set to the drawer follows the finger; anything else fires on release past [swipe].
     val swipe = with(LocalDensity.current) { 60.dp.toPx() }
     val travel = remember { floatArrayOf(0f) }
@@ -523,6 +524,8 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
             val page = apps.pages.getOrNull(i) ?: return@HorizontalPager
             Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
                 Clock()
+                if (prefs.nextEvent) NextEventLine(events)
+                if (prefs.todayCard && i == apps.defaultPage) TodayCard(events, Modifier.padding(top = 18.dp))
                 Spacer(Modifier.height(24.dp))
                 HomeGrid(apps, widgets, i, page, selected, { selected = it }, Modifier.weight(1f).fillMaxWidth())
             }

@@ -76,6 +76,8 @@ class Prefs(context: Context) {
     var iconShape by P("set.iconShape", "squircle")
     var labels by P("set.labels", true)
     var lockLayout by P("set.lockLayout", false)
+    var nextEvent by P("set.nextEvent", false)
+    var todayCard by P("set.todayCard", false)
 
     // Search & calculator
     var calcMath by P("set.calcMath", true)
@@ -167,7 +169,7 @@ private fun settingsPages(apps: Apps): List<Page> = listOf(
         { (listOf("Apps") + listOfNotNull("contacts".takeIf { prefs.srcContacts }, "settings".takeIf { prefs.srcSettings }, "web".takeIf { prefs.srcWeb })).joinToString(", ") },
         "contacts people settings web engine google duckduckgo fuzzy frequent ranking") { SourcesSettings() },
     Page("home", "Layout", SIc.home, false, "Home screen", { "Grid ${prefs.columns} × ${prefs.rows} · icons ${prefs.iconSize}%" },
-        "columns rows grid icon size shape labels lock layout") { HomeSettings() },
+        "columns rows grid icon size shape labels lock layout calendar agenda today event") { HomeSettings() },
     Page("dock", "Layout", SIc.dock, false, "Dock & search bar",
         { (if (prefs.showDock) "${prefs.dockSize} icons" else "no dock") + " · " + SearchBars.first { it.first == prefs.searchBar }.third },
         "dock icons search bar position top bottom microphone voice") { DockSettings() },
@@ -352,6 +354,27 @@ private fun HomeSettings() {
         { SwitchRow("Show labels", null, prefs.labels) { prefs.labels = it } },
         { SwitchRow("Lock layout", "Prevent accidental moves", prefs.lockLayout) { prefs.lockLayout = it } },
     ))
+    AgendaSettings()
+}
+
+@Composable
+private fun AgendaSettings() {
+    val context = LocalContext.current
+    var pending by remember { mutableStateOf<String?>(null) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) when (pending) { "next" -> prefs.nextEvent = true; "today" -> prefs.todayCard = true }
+        pending = null
+    }
+    fun set(which: String, on: Boolean) {
+        if (on && !hasCalendar(context)) { pending = which; ask.launch(android.Manifest.permission.READ_CALENDAR); return }
+        if (which == "next") prefs.nextEvent = on else prefs.todayCard = on
+    }
+    Group("Calendar", listOf(
+        { SwitchRow("Next event under the clock", "“Standup at 9:30”", prefs.nextEvent) { set("next", it) } },
+        { SwitchRow("Today card", "Today's events on the default page", prefs.todayCard) { set("today", it) } },
+    ), Modifier.padding(top = 18.dp))
+    if (!hasCalendar(context) && (prefs.nextEvent || prefs.todayCard)) Text("Calendar access was turned off in system settings.", color = Dim, fontSize = 12.sp,
+        modifier = Modifier.padding(start = 4.dp, top = 8.dp))
 }
 
 /** Small live model of the home screen: clock, the icon grid at the chosen size and shape, search bar. */
