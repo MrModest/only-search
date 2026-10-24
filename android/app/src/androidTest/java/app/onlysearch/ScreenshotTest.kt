@@ -42,6 +42,9 @@ class ScreenshotTest {
         File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
+    // Some expressions may legitimately show no calculator card; screenshot whatever is there.
+    private fun softWait(condition: () -> Boolean) = runCatching { compose.waitUntil(20_000, condition) }
+
     private val homeIcon = { label: String -> hasContentDescription(label) and hasAnyAncestor(hasTestTag("home")) }
 
     // Pinned apps, launch counts (for "Frequent") and calculator history, as a regular user would have.
@@ -92,25 +95,39 @@ class ScreenshotTest {
         scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         compose.waitForIdle()
 
-        // Search: empty state (frequent + history), app results, then calculator results.
+        // Search: empty state (frequent + history), app matches, then the calculator from simple maths
+        // up to time-zone conversion. Numbered so the files sort in that order.
         compose.onNodeWithTag("homeSearch").performClick()
-        shot("07-search-empty", 1500)
+        shot("10-search-empty", 1500)
         compose.onNodeWithTag("searchField").performTextInput("ca")
-        shot("08-search-apps")
+        shot("11-search-apps")
 
         listOf(
-            "65 kg in pounds" to "143.3",
-            "\$10 for lunch + 15% tip" to "11.50",
-            "9:35am in New York to Japan" to "10:35",
-            "January 30 2020 + 3 months 2 weeks 5 days" to "May 19",
-            "\$25k over 10 years at 7.5%" to "51,525",
-            "40 is what % of 90" to "44.44",
-            "100 USD in EUR" to "€",
-        ).forEachIndexed { i, (expression, expect) ->
-            compose.onNodeWithTag("searchField").performTextClearance()
-            compose.onNodeWithTag("searchField").performTextInput(expression)
-            compose.waitUntil(30_000) { compose.onAllNodesWithText(expect, substring = true).fetchSemanticsNodes().isNotEmpty() }
-            shot("%02d-calc-%s".format(9 + i, expression.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')))
+            "arithmetic" to "2+2",
+            "arithmetic" to "(128 * 3.5) / 4 + 12^2",
+            "percent" to "20% of 450",
+            "percent" to "40 is what % of 90",
+            "percent" to "\$150 is 25% on what",
+            "money" to "\$10 for lunch + 15% tip",
+            "money" to "\$25/hour * 14 hours of work",
+            "money" to "\$25k over 10 years at 7.5%",
+            "units" to "65 kg in pounds",
+            "units" to "5 km in miles",
+            "units" to "72 F in C",
+            "currency" to "100 USD in EUR",
+            "dates" to "today + 3 weeks",
+            "dates" to "January 30 2020 + 3 months 2 weeks 5 days",
+            "time" to "3:45pm + 4 hr 10 min",
+            "timezone" to "9:35am in New York to Japan",
+            "timezone" to "time in Tokyo",
+            "timezone" to "2pm London in Los Angeles",
+        ).forEachIndexed { i, (topic, expression) ->
+            val field = compose.onNodeWithTag("searchField")
+            field.performTextClearance()
+            softWait { compose.onAllNodes(hasTestTag("calcCard")).fetchSemanticsNodes().isEmpty() }
+            field.performTextInput(expression)
+            softWait { compose.onAllNodes(hasTestTag("calcCard")).fetchSemanticsNodes().isNotEmpty() }
+            shot("%02d-%s-%s".format(20 + i, topic, expression.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')))
         }
         scenario.close()
     }

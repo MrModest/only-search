@@ -625,7 +625,7 @@ private fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit) {
 @Composable
 private fun CalcCard(c: Calc, onCopy: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp).clip(RoundedCornerShape(4.dp))
+        Modifier.testTag("calcCard").fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp).clip(RoundedCornerShape(4.dp))
             .background(Color(0xFF1D1B17)).border(1.dp, Color(0xFF3A3222), RoundedCornerShape(4.dp))
             .clickable(onClick = onCopy).padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
