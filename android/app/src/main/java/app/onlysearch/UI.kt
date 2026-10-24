@@ -305,7 +305,10 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
         )
     }
 
-    dnd.onStart = { if (it.from == "drawer" || it.from == "popup") { settleDrawer(false); closeSearch() } }
+    dnd.onStart = {
+        if (it.from == "drawer" || it.from == "popup") { settleDrawer(false); closeSearch() }
+        if (it.from == "picker" && editing) { editing = false; scope.launch { pager.scrollToPage(apps.currentPage) } }
+    }
     dnd.onDrop = { d, at ->
         val page = pager.currentPage
         val grid = apps.pages.getOrNull(page)?.let { dnd.grids[it.id] }
@@ -315,6 +318,9 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
                 d.key.removePrefix("w:").toIntOrNull()?.takeIf { d.key.startsWith("w:") }?.let(widgets::remove)
                 apps.removeItem(d.key)
                 if (apps.dock.remove(d.key)) apps.saveDock()
+            }
+            d.from == "picker" -> if (target != null && apps.fits(page, target.x, target.y, target.w, target.h)) {
+                widgets.providers().firstOrNull { pickerKey(it) == d.key }?.let { apps.widgetSpot = page to target; apps.currentPage = page; widgets.add(it) }
             }
             apps.byKey(d.key) != null && dnd.dock.contains(at) ->
                 apps.dropOnDock(d.key, ((at.x - dnd.dock.left) / (dnd.dock.width / 4)).toInt())
@@ -407,7 +413,11 @@ private fun DragGhost(apps: Apps, dnd: DragDrop) {
     Box(Modifier.offset { IntOffset((dnd.pos.x - d.grab.x).roundToInt(), (dnd.pos.y - d.grab.y).roundToInt()) }.size(w, h)
         .graphicsLayer { scaleX = 1.08f; scaleY = 1.08f }) {
         val app = apps.byKey(d.key)
-        if (d.icon != null) Image(d.icon, null, Modifier.fillMaxSize().clip(iconShape(prefs.iconShape, w)))
+        if (d.from == "picker") Box(Modifier.fillMaxSize().padding(4.dp).clip(RoundedCornerShape(24.dp)).background(Card.copy(alpha = 0.85f))
+            .border(2.dp, Accent, RoundedCornerShape(24.dp)).padding(10.dp)) {
+            d.icon?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+        }
+        else if (d.icon != null) Image(d.icon, null, Modifier.fillMaxSize().clip(iconShape(prefs.iconShape, w)))
         else if (app != null) AppIcon(apps, app, w)
         else Box(Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).background(Accent.copy(alpha = 0.18f)).border(2.dp, Accent, RoundedCornerShape(24.dp)))
     }
@@ -665,11 +675,14 @@ internal fun WidgetPicker(apps: Apps, widgets: Widgets, only: String?, onClose: 
     }
     var filter by remember { mutableStateOf("") }
     var open by remember { mutableStateOf(groups.firstOrNull()?.first) }
+    // While a preview is dragged onto home the sheet stays composed (it owns the gesture) but invisible.
+    var dragging by remember { mutableStateOf(false) }
     val shown = groups.mapNotNull { (pkg, label, list) ->
         val hits = if (filter.isBlank() || label.contains(filter, true)) list else list.filter { it.loadLabel(pm).contains(filter, true) }
         if (hits.isEmpty()) null else Triple(pkg, label, hits)
     }
-    Box(Modifier.fillMaxSize().background(Color(0xB3000000)).clickable(interactionSource = null, indication = null, onClick = onClose)) {
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (dragging) 0f else 1f }.background(Color(0xB3000000))
+        .clickable(interactionSource = null, indication = null, onClick = onClose)) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.86f)
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).background(Color(0xFF15171B))
@@ -680,7 +693,7 @@ internal fun WidgetPicker(apps: Apps, widgets: Widgets, only: String?, onClose: 
             Handle(Modifier.padding(bottom = 12.dp))
             Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Widgets", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text("tap to place", color = Muted, fontSize = 11.sp, fontFamily = Mono)
+                Text("hold & drag to place", color = Muted, fontSize = 11.sp, fontFamily = Mono)
             }
             Row(
                 Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp)).background(Tile)
@@ -711,7 +724,9 @@ internal fun WidgetPicker(apps: Apps, widgets: Widgets, only: String?, onClose: 
                     }
                     if (expanded) items(rows, key = { it[0].provider.flattenToString() }) { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            row.forEach { p -> WidgetPreview(p, Modifier.weight(1f)) { widgets.add(p); onClose() } }
+                            row.forEach { p ->
+                                WidgetPreview(apps, p, Modifier.weight(1f), onDragging = { dragging = true }, onDropped = onClose) { widgets.add(p); onClose() }
+                            }
                             if (row.size == 1 && cells(row[0], density).first <= 2) Spacer(Modifier.weight(1f))
                         }
                     }
@@ -721,6 +736,8 @@ internal fun WidgetPicker(apps: Apps, widgets: Widgets, only: String?, onClose: 
     }
 }
 
+internal fun pickerKey(p: AppWidgetProviderInfo) = "p:${p.profile.hashCode()}:${p.provider.flattenToString()}"
+
 /** Width × height in launcher cells (~70dp each); Android 12+ widgets state their own size. */
 internal fun cells(p: AppWidgetProviderInfo, density: Float): Pair<Int, Int> {
     fun of(px: Int) = ((px / density + 30) / 70).toInt().coerceAtLeast(1)
@@ -729,15 +746,34 @@ internal fun cells(p: AppWidgetProviderInfo, density: Float): Pair<Int, Int> {
 }
 
 @Composable
-internal fun WidgetPreview(p: AppWidgetProviderInfo, modifier: Modifier, onClick: () -> Unit) {
+internal fun WidgetPreview(apps: Apps, p: AppWidgetProviderInfo, modifier: Modifier, onDragging: () -> Unit, onDropped: () -> Unit, onClick: () -> Unit) {
     val context = LocalContext.current
     val density = context.resources.displayMetrics
+    val dnd = LocalDragDrop.current
+    val haptic = LocalHapticFeedback.current
     val preview = remember(p) {
         runCatching { (p.loadPreviewImage(context, density.densityDpi) ?: p.loadIcon(context, density.densityDpi))?.toBitmap()?.asImageBitmap() }.getOrNull()
     }
     val (w, h) = cells(p, density.density)
+    val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
     Column(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Sheet).clickable(onClick = onClick).padding(14.dp),
+        modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Sheet).onGloballyPositioned { coords[0] = it }
+            .semantics { onClick { onClick(); true } }
+            .pointerInput(p) {
+                tapHoldDrag(
+                    { coords[0] }, onTap = onClick, onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                    onDragStart = { _, at ->
+                        // The ghost takes the widget's size on the current page's grid.
+                        val grid = apps.pages.getOrNull(apps.currentPage)?.let { dnd.grids[it.id] } ?: return@tapHoldDrag
+                        val cw = w.coerceAtMost(prefs.columns); val ch = h.coerceAtMost(prefs.rows)
+                        val size = Size(grid.width / prefs.columns * cw, grid.height / prefs.rows * ch)
+                        onDragging()
+                        dnd.start(Dragged(pickerKey(p), cw, ch, "picker", Offset(size.width / 2, size.height / 2), size, preview), at)
+                    },
+                    onDrag = dnd::move, onDragEnd = { dnd.end(); onDropped() },
+                )
+            }
+            .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(
