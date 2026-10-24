@@ -70,6 +70,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -162,7 +164,8 @@ import kotlin.math.roundToInt
 
 // Mock-up 2026-10-24 (docs/Mock-up 2026-10-24.html): soft dark tiles and cards, sky-blue accent, Inter + JetBrains Mono.
 // Motion follows Nova Launcher: finger-tracked drawer, icon zoom launches, press scale, popup shortcuts.
-internal val Sheet = Color(0xFF0E0F12)
+// Sheet, Scrim and the accent colours follow Settings › Look & feel; reading them in composition keeps the UI in sync.
+internal val Sheet get() = if (prefs.black) Color.Black else Color(0xFF0E0F12)
 internal val Tile = Color(0xFF1E2025)
 internal val TileLine = Color(0xFF30333A)
 internal val FieldBg = Color(0xFF1A1C21)
@@ -171,15 +174,16 @@ internal val CardLine = Color(0xFF26292F)
 internal val Divider = Color(0xFF23262C)
 internal val PillLine = Color(0xFF34373E)
 internal val ChipLine = Color(0xFF2E3138)
-internal val Accent = Color(0xFF7CC4FA)
-internal val OnAccent = Color(0xFF06121C)
-internal val AccentCard = Color(0xFF121B24)
-internal val AccentLine = Color(0xFF24405A)
+internal val Accents = listOf("sky" to Color(0xFF7CC4FA), "amber" to Color(0xFFF5B04A), "mint" to Color(0xFF7FD8B0), "rose" to Color(0xFFF59AB0), "violet" to Color(0xFFB9A2F8))
+internal val Accent get() = Accents.firstOrNull { it.first == prefs.accent }?.second ?: Accents[0].second
+internal val OnAccent get() = lerp(Color(0xFF06121C), Accent, 0.05f)
+internal val AccentCard get() = lerp(Color(0xFF0E0F12), Accent, 0.07f)
+internal val AccentLine get() = lerp(Color(0xFF0E0F12), Accent, 0.28f)
 internal val Fg = Color(0xFFEDEAE4)
 internal val Muted = Color(0xFFA6A29A)
 internal val Dim = Color(0xFF8C887F)
 internal val Danger = Color(0xFFFF8A7A)
-internal val Scrim = Color(0xF2111216)
+internal val Scrim get() = if (prefs.black) Color(0xF5000000) else Color(0xF2111216)
 internal val PopupBg = Color(0xFF1C1E23)
 internal val TextShadow = Shadow(Color(0x66000000), Offset(0f, 1f), 3f)
 internal val Settle = spring<Float>(dampingRatio = 0.9f, stiffness = 420f)
@@ -387,6 +391,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
                 scaleX = s; scaleY = s
                 alpha = (1f - p) * enter.value
             }) {
+                if (prefs.dim > 0) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = prefs.dim / 100f)))
                 HomeScreen(apps, widgets, pager, homeActions)
             }
             // Status icons are always light (MainActivity); this shade keeps them readable on a light wallpaper.
@@ -985,9 +990,12 @@ internal fun iconShape(name: String, size: Dp): Shape = when (name) {
 @Composable
 internal fun AppIcon(apps: Apps, app: App, size: Dp, modifier: Modifier = Modifier, ring: Boolean = false) {
     val bmp = apps.icons[app.key]
+    val mono = if (prefs.themedIcons) apps.monoIcons[app.key] else null
     val shape = iconShape(prefs.iconShape, size)
     val m = modifier.size(size).then(if (ring) Modifier.border(2.dp, Accent, shape) else Modifier).clip(shape)
-    if (bmp != null) Image(bmp, app.label, m) else Box(m.background(Tile).border(1.dp, TileLine, shape))
+    // Themed: the app's monochrome layer in the accent colour on a plain tile (Android 13+ apps that ship one).
+    if (mono != null) Image(mono, app.label, m.background(Tile), colorFilter = ColorFilter.tint(Accent))
+    else if (bmp != null) Image(bmp, app.label, m) else Box(m.background(Tile).border(1.dp, TileLine, shape))
 }
 
 private object FullScreen : PopupPositionProvider {

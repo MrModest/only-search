@@ -112,6 +112,12 @@ class Prefs(context: Context) {
     var searchBar by P("set.searchBar", "bottom")
     var mic by P("set.mic", true)
 
+    // Look & feel
+    var accent by P("set.accent", "sky")
+    var black by P("set.black", false)
+    var themedIcons by P("set.themedIcons", false)
+    var dim by P("set.dim", 0)
+
     // App drawer
     var drawerColumns by P("set.drawerColumns", 4)
     var suggested by P("set.suggested", true)
@@ -120,7 +126,7 @@ class Prefs(context: Context) {
 
 lateinit var prefs: Prefs
 
-internal val SettingsBg = Color(0xFF111216)
+internal val SettingsBg get() = if (prefs.black) Color.Black else Color(0xFF111216)
 internal val GroupLine = Color(0xFF24272D)
 
 internal object SIc {
@@ -171,7 +177,9 @@ private fun settingsPages(apps: Apps): List<Page> = listOf(
     Page("gestures", "Behaviour", SIc.gestures, false, "Gestures",
         { "Swipe down: ${actionLabel(apps, gesture("gDown")).lowercase()} · double tap: ${actionLabel(apps, gesture("gDoubleTap")).lowercase().removeSuffix(" screen")}" },
         "gestures swipe double tap pinch home button dock lock notifications type anywhere keyboard reset query") { GestureSettings(apps) },
-    Page("look", "Behaviour", SIc.look, false, "Look & feel", { "Dark · sky accent" }, "", null),
+    Page("look", "Behaviour", SIc.look, false, "Look & feel",
+        { listOfNotNull(if (prefs.black) "Black" else "Dark", "${prefs.accent} accent", "themed icons".takeIf { prefs.themedIcons }).joinToString(" · ") },
+        "theme accent colour color dark black themed icons monochrome wallpaper dim") { LookSettings() },
     Page("backup", "System", SIc.backup, false, "Backup & restore", { "Last backup: never" }, "", null),
 )
 
@@ -576,5 +584,42 @@ private fun DockSettings() {
         ))
         if (prefs.searchBar == "hidden") Text("Without the bar, swipe down on home (Gestures) or use the drawer's search to find things.",
             color = Muted, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(horizontal = 4.dp))
+    }
+}
+
+@Composable
+private fun LookSettings() {
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Group("Accent", listOf {
+            Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Accents.forEach { (name, color) ->
+                    val on = prefs.accent == name
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { prefs.accent = name }.padding(4.dp).semantics { contentDescription = name }) {
+                        Box(Modifier.size(40.dp).clip(CircleShape).background(color).border(if (on) 3.dp else 0.dp, if (on) Fg else Color.Transparent, CircleShape))
+                        Text(name.replaceFirstChar { it.uppercase() }, color = if (on) Fg else Muted, fontSize = 12.sp)
+                    }
+                }
+            }
+        })
+        Group("Theme", listOf(
+            { SwitchRow("Pure black", "Black sheets for OLED screens", prefs.black) { prefs.black = it } },
+            {
+                SwitchRow("Themed icons", if (android.os.Build.VERSION.SDK_INT >= 33) "Monochrome icons in the accent colour, where apps provide one" else "Needs Android 13",
+                    prefs.themedIcons) { prefs.themedIcons = it && android.os.Build.VERSION.SDK_INT >= 33 }
+            },
+            {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row {
+                        Column(Modifier.weight(1f)) {
+                            Text("Dim wallpaper", fontSize = 15.sp)
+                            Text("Keeps the clock readable on bright wallpapers", color = Muted, fontSize = 12.sp)
+                        }
+                        Text("${prefs.dim}%", color = Accent, fontSize = 13.sp, fontFamily = Mono)
+                    }
+                    ThinSlider(prefs.dim, 0..60, 5) { prefs.dim = it }
+                }
+            },
+        ))
     }
 }

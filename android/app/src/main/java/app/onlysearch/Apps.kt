@@ -63,6 +63,8 @@ class Apps(private val context: Context) {
 
     val all = mutableStateListOf<App>()
     val icons = mutableStateMapOf<String, ImageBitmap>()
+    /** Monochrome layers (Android 13+), white; drawn tinted when themed icons are on. */
+    val monoIcons = mutableStateMapOf<String, ImageBitmap>()
     val pages = mutableStateListOf<HomePage>().apply { addAll(loadPages()) }
     var defaultPage by mutableIntStateOf(sp.getInt("defaultPage", 0).coerceIn(pages.indices))
     /** The page on screen; new pins and widgets land here. */
@@ -96,9 +98,12 @@ class Apps(private val context: Context) {
                 .map { (app, info) -> systemLabels[app.key] = app.label; app.copy(label = sp.getString("label:${app.key}", null) ?: app.label) to info }
                 .sortedBy { it.first.label.lowercase() }
             val size = (56 * context.resources.displayMetrics.density).toInt()
-            apps to apps.filter { it.first.key !in icons }.associate { (app, info) -> app.key to squareIcon(info.getIcon(0), size) }
+            val fresh = apps.filter { it.first.key !in icons }
+            apps to (fresh.associate { (app, info) -> app.key to squareIcon(info.getIcon(0), size) } to
+                fresh.mapNotNull { (app, info) -> monoIcon(info.getIcon(0), size)?.let { app.key to it } }.toMap())
         }
-        icons.putAll(newIcons)
+        icons.putAll(newIcons.first)
+        monoIcons.putAll(newIcons.second)
         sp.all.forEach { (k, v) -> if (k.startsWith("count:") && v is Int) counts[k.removePrefix("count:")] = v }
         all.clear(); all.addAll(apps.map { it.first })
         if (dock.isEmpty() && pages.all { it.items.isEmpty() } && !sp.getBoolean("seeded", false)) seedDefaults()
@@ -393,6 +398,18 @@ class Apps(private val context: Context) {
 
     private fun android.content.SharedPreferences.list(name: String) =
         getString(name, "")!!.split("\n").filter { it.isNotEmpty() }
+}
+
+/** The adaptive icon's monochrome layer, centred like the launcher draws it, or null. */
+fun monoIcon(d: Drawable, size: Int): ImageBitmap? {
+    if (android.os.Build.VERSION.SDK_INT < 33 || d !is AdaptiveIconDrawable) return null
+    val mono = d.monochrome ?: return null
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val inset = size / 4
+    mono.setBounds(-inset, -inset, size + inset, size + inset)
+    mono.setTint(android.graphics.Color.WHITE)
+    mono.draw(Canvas(bmp))
+    return bmp.asImageBitmap()
 }
 
 /** Renders adaptive icons full-bleed (no system mask) so the UI can clip them to its own near-square shape. */
