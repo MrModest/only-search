@@ -96,6 +96,12 @@ class Prefs(context: Context) {
     var fuzzy by P("set.fuzzy", true)
     var engine by P("set.engine", "Google")
 
+    // Dock & search bar
+    var dockSize by P("set.dockSize", 4)
+    var showDock by P("set.showDock", true)
+    var searchBar by P("set.searchBar", "bottom")
+    var mic by P("set.mic", true)
+
     // App drawer
     var drawerColumns by P("set.drawerColumns", 4)
     var suggested by P("set.suggested", true)
@@ -146,7 +152,9 @@ private fun settingsPages(apps: Apps): List<Page> = listOf(
         "contacts people settings web engine google duckduckgo fuzzy frequent ranking") { SourcesSettings() },
     Page("home", "Layout", SIc.home, false, "Home screen", { "Grid ${prefs.columns} × ${prefs.rows} · icons ${prefs.iconSize}%" },
         "columns rows grid icon size shape labels lock layout") { HomeSettings() },
-    Page("dock", "Layout", SIc.dock, false, "Dock & search bar", { "4 icons · search bar at bottom" }, "", null),
+    Page("dock", "Layout", SIc.dock, false, "Dock & search bar",
+        { (if (prefs.showDock) "${prefs.dockSize} icons" else "no dock") + " · " + SearchBars.first { it.first == prefs.searchBar }.third },
+        "dock icons search bar position top bottom microphone voice") { DockSettings() },
     Page("drawer", "Layout", SIc.drawer, false, "App drawer & folders",
         { listOfNotNull("${prefs.drawerColumns} columns", "A–Z scrubber".takeIf { prefs.scrubber }, apps.groups.size.let { if (it == 1) "1 group" else "$it groups" }).joinToString(" · ") },
         "drawer columns suggested scrubber groups folders hidden apps unhide") { DrawerSettings(apps) },
@@ -525,5 +533,36 @@ private fun CalcSettings() {
                 }
             },
         ))
+    }
+}
+
+internal val SearchBars = listOf(
+    Triple("bottom", "Below the dock", "search bar at bottom"), Triple("above", "Above the dock", "search bar above dock"),
+    Triple("top", "Top of the screen", "search bar at top"), Triple("hidden", "Hidden", "no search bar"),
+)
+
+@Composable
+private fun DockSettings() {
+    var positions by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Group("Dock", listOf(
+            { SwitchRow("Show dock", "Apps that stay on every page", prefs.showDock) { prefs.showDock = it } },
+            { Stepper("Icons", prefs.dockSize, 3..6) { prefs.dockSize = it } },
+        ))
+        Group("Search bar", listOf(
+            {
+                Box {
+                    ValueRow("Position", SearchBars.first { it.first == prefs.searchBar }.second) { positions = true }
+                    DropdownMenu(positions, { positions = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
+                        SearchBars.forEach { (id, name) ->
+                            DropdownMenuItem({ Text(name, color = if (id == prefs.searchBar) Accent else Fg) }, { prefs.searchBar = id; positions = false })
+                        }
+                    }
+                }
+            },
+            { SwitchRow("Voice button", "Mic at the end of the bar", prefs.mic) { prefs.mic = it } },
+        ))
+        if (prefs.searchBar == "hidden") Text("Without the bar, swipe down on home (Gestures) or use the drawer's search to find things.",
+            color = Muted, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(horizontal = 4.dp))
     }
 }

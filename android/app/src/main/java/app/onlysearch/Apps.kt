@@ -249,13 +249,15 @@ class Apps(private val context: Context) {
         }.ifEmpty { listOf(HomePage()) }
     }
 
-    fun toggleDock(app: App) = toggle(dock, "dock", app, 4)
+    fun toggleDock(app: App) = toggle(dock, "dock", app, prefs.dockSize)
 
     fun saveDock() = sp.edit { putString("dock", dock.joinToString("\n")) }
 
     /** Moves an app into the dock at [index] (reordering if it's already there); takes it off the home grid. */
     fun dropOnDock(key: String, index: Int) {
-        if (key !in dock && dock.size >= 4) return
+        // Apps past the dock size (after it was made smaller) don't show; drop them rather than keep them invisibly.
+        while (dock.size > prefs.dockSize) dock.removeAt(dock.lastIndex)
+        if (key !in dock && dock.size >= prefs.dockSize) return
         dock.remove(key)
         dock.add(index.coerceIn(0, dock.size), key)
         dropItem(key); savePages(); saveDock()

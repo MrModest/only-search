@@ -331,7 +331,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
                 widgets.providers().firstOrNull { pickerKey(it) == d.key }?.let { apps.widgetSpot = page to target; apps.currentPage = page; widgets.add(it) }
             }
             apps.byKey(d.key) != null && dnd.dock.contains(at) ->
-                apps.dropOnDock(d.key, ((at.x - dnd.dock.left) / (dnd.dock.width / 4)).toInt())
+                apps.dropOnDock(d.key, ((at.x - dnd.dock.left) / (dnd.dock.width / prefs.dockSize)).toInt())
             target != null -> if (apps.moveTo(page, target) && d.from == "dock") apps.dock.remove(d.key).also { apps.saveDock() }
         }
     }
@@ -460,7 +460,11 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
             }
             .testTag("home")
     ) {
-    Column(Modifier.fillMaxSize().systemBarsPadding().padding(top = 24.dp, bottom = 12.dp)) {
+    Column(Modifier.fillMaxSize().systemBarsPadding().padding(top = if (prefs.searchBar == "top") 8.dp else 24.dp, bottom = 12.dp)) {
+        val pill = @Composable { m: Modifier ->
+            Pill("Apps, math, units, time…", m.testTag("homeSearch"), onClick = actions.onSearch) { if (prefs.mic) MicButton(actions.onVoice) }
+        }
+        if (prefs.searchBar == "top") pill(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 16.dp))
         HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), key = { apps.pages.getOrNull(it)?.id ?: -1L }) { i ->
             val page = apps.pages.getOrNull(i) ?: return@HorizontalPager
             Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
@@ -471,11 +475,12 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
         }
         Column(Modifier.padding(horizontal = 18.dp)) {
             PageDots(apps.pages.size, pager.currentPage, Modifier.padding(top = 18.dp, bottom = 16.dp))
-            Box(Modifier.onGloballyPositioned { dnd.dock = it.boundsInWindow() }) {
-                AppGrid(apps, apps.dock.mapNotNull(apps::byKey), size = 58.dp * prefs.iconSize / 100, labelColor = null, drag = "dock")
-            }
-            Spacer(Modifier.height(16.dp))
-            Pill("Apps, math, units, time…", Modifier.testTag("homeSearch"), onClick = actions.onSearch) { MicButton(actions.onVoice) }
+            if (prefs.searchBar == "above") pill(Modifier.padding(bottom = 16.dp))
+            if (prefs.showDock) Box(Modifier.heightIn(min = 58.dp).onGloballyPositioned { dnd.dock = it.boundsInWindow() }) {
+                AppGrid(apps, apps.dock.take(prefs.dockSize).mapNotNull(apps::byKey), size = 58.dp * prefs.iconSize / 100, labelColor = null,
+                    columns = prefs.dockSize, drag = "dock")
+            } else LaunchedEffect(Unit) { dnd.dock = Rect.Zero }
+            if (prefs.searchBar == "bottom") { Spacer(Modifier.height(16.dp)); pill(Modifier) }
         }
     }
     // Menus open where the finger was.
