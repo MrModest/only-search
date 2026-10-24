@@ -80,6 +80,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
@@ -252,14 +253,14 @@ private fun HomeScreen(apps: Apps, widgets: Widgets, actions: HomeActions) {
             .combinedClickable(interactionSource = null, indication = null, onLongClick = {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress); menu = true
             }) {}
-            .systemBarsPadding().padding(horizontal = 6.dp)
+            .systemBarsPadding().padding(horizontal = 6.dp).testTag("home")
     ) {
         Clock()
         widgets.ids.forEach { id -> WidgetView(widgets, id); Spacer(Modifier.height(6.dp)) }
         Spacer(Modifier.weight(1f))
         AppGrid(apps, apps.home.mapNotNull(apps::byKey), labels = true)
         Spacer(Modifier.height(8.dp))
-        Bar(Modifier.clickable(onClick = onSearch)) {
+        Bar(Modifier.testTag("homeSearch").clickable(onClick = onSearch)) {
             Text("⌕", color = Muted, fontSize = 15.sp)
             Text("Search apps, math, dates", color = Muted, fontSize = 14.sp, modifier = Modifier.weight(1f))
             Kbd("↑ apps", Modifier.clickable(onClick = onDrawer))
@@ -454,7 +455,7 @@ private fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: (
     var scrubLetter by remember { mutableStateOf<Char?>(null) }
     var scrubY by remember { mutableFloatStateOf(0f) }
     var scrubTop by remember { mutableFloatStateOf(0f) }
-    Column(Modifier.fillMaxSize().background(Scrim).systemBarsPadding().imePadding()) {
+    Column(Modifier.fillMaxSize().background(Scrim).systemBarsPadding().imePadding().testTag("drawer")) {
         Box(Modifier.weight(1f)) {
             LazyVerticalGrid(GridCells.Fixed(5), Modifier.fillMaxSize().padding(end = 14.dp).nestedScroll(scroll), grid,
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -468,7 +469,7 @@ private fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: (
                 }
             }
             val letters = headerIndex.keys.toList()
-            Column(Modifier.align(Alignment.CenterEnd).width(14.dp)
+            Column(Modifier.align(Alignment.CenterEnd).width(14.dp).testTag("scrubber")
                 .onGloballyPositioned { scrubTop = it.positionInParent().y }
                 .pointerInput(headerIndex) {
                     fun jump(y: Float) {
@@ -614,7 +615,7 @@ private fun SearchScreen(apps: Apps, query: String, onQuery: (String) -> Unit) {
         Spacer(Modifier.height(4.dp))
         Bar {
             Text("⌕", color = Muted, fontSize = 15.sp)
-            Field(query, onQuery, "Search apps, math, dates", Modifier.weight(1f), autoFocus = true, onGo = go)
+            Field(query, onQuery, "Search apps, math, dates", Modifier.weight(1f).testTag("searchField"), autoFocus = true, onGo = go)
             if (query.isNotEmpty()) Text("✕", color = Muted, fontSize = 13.sp, modifier = Modifier.clickable { onQuery("") }.padding(horizontal = 4.dp))
         }
         Spacer(Modifier.height(6.dp))

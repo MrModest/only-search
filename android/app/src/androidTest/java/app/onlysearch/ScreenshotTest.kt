@@ -1,0 +1,117 @@
+package app.onlysearch
+
+import android.content.Context
+import android.content.pm.LauncherApps
+import android.graphics.Bitmap
+import android.os.Process
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.test.core.app.ActivityScenario
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * Not a correctness test: drives the launcher through its main features with seeded data and saves
+ * full-screen PNGs to <external files>/shots for design work. Run by .github/workflows/screenshots.yml.
+ */
+@RunWith(AndroidJUnit4::class)
+class ScreenshotTest {
+    @get:Rule val compose = createEmptyComposeRule()
+    private val instrumentation = InstrumentationRegistry.getInstrumentation()
+    private val context = instrumentation.targetContext
+    private val dir by lazy { File(context.getExternalFilesDir(null), "shots").apply { deleteRecursively(); mkdirs() } }
+
+    private fun shot(name: String, settleMs: Long = 900) {
+        compose.waitForIdle()
+        Thread.sleep(settleMs)
+        val bitmap = instrumentation.uiAutomation.takeScreenshot()
+        File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    private val homeIcon = { label: String -> hasContentDescription(label) and hasAnyAncestor(hasTestTag("home")) }
+
+    // Pinned apps, launch counts (for "Frequent") and calculator history, as a regular user would have.
+    private fun seed() {
+        val user = Process.myUserHandle()
+        val keys = context.getSystemService(LauncherApps::class.java).getActivityList(null, user)
+            .associate { it.label.toString() to "${it.componentName.flattenToString()}#${user.hashCode()}" }
+        context.getSharedPreferences("launcher", Context.MODE_PRIVATE).edit().clear()
+            .putString("home", listOf("Calendar", "Maps", "Photos", "Gmail", "Clock", "Drive", "Files", "Contacts").mapNotNull(keys::get).joinToString("\n"))
+            .apply { listOf("Chrome" to 12, "Messages" to 9, "Maps" to 7, "Camera" to 5, "Gmail" to 4).forEach { (l, n) -> keys[l]?.let { putInt("count:$it", n) } } }
+            .putString("history", listOf(
+                "9:35am in New York to Japan\t10:35 PM",
+                "\$10 for lunch + 15% tip\t\$11.50",
+                "January 30 2020 + 3 months 2 weeks 5 days\tMay 19, 2020",
+            ).joinToString("\n"))
+            .commit()
+    }
+
+    @Test
+    fun showcase() {
+        seed()
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        scenario.onActivity { a ->
+            a.widgets.providers().firstOrNull { it.provider.packageName.contains("deskclock") && it.configure == null }
+                ?.let { a.widgets.add(it) }
+        }
+        compose.waitUntil(30_000) { compose.onAllNodes(homeIcon("Calendar")).fetchSemanticsNodes().isNotEmpty() }
+        shot("01-home", 2500)
+
+        // Drawer: mid-swipe (finger down) and fully open.
+        compose.onNodeWithTag("home").performTouchInput {
+            down(Offset(centerX, height * 0.75f)); moveTo(Offset(centerX, height * 0.62f)); moveTo(Offset(centerX, height * 0.5f))
+        }
+        shot("02-drawer-dragging")
+        compose.onNodeWithTag("home").performTouchInput { moveTo(Offset(centerX, height * 0.25f)); up() }
+        shot("03-drawer", 1500)
+
+        compose.onNodeWithTag("scrubber").performTouchInput { down(Offset(centerX, height * 0.5f)); moveTo(Offset(centerX, height * 0.55f)) }
+        shot("04-drawer-letter-scrubber")
+        compose.onNodeWithTag("scrubber").performTouchInput { up() }
+
+        scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        shot("05-back-home", 1500)
+
+        // Long-press popup with shortcuts and quick actions.
+        compose.onNode(homeIcon("Calendar")).performTouchInput { longClick() }
+        shot("06-long-press-popup", 1200)
+        scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        compose.waitForIdle()
+
+        // Search: empty state (frequent + history), app results, then calculator results.
+        compose.onNodeWithTag("homeSearch").performClick()
+        shot("07-search-empty", 1500)
+        compose.onNodeWithTag("searchField").performTextInput("ca")
+        shot("08-search-apps")
+
+        listOf(
+            "65 kg in pounds" to "143.3",
+            "\$10 for lunch + 15% tip" to "11.50",
+            "9:35am in New York to Japan" to "10:35",
+            "January 30 2020 + 3 months 2 weeks 5 days" to "May 19",
+            "\$25k over 10 years at 7.5%" to "51,525",
+            "40 is what % of 90" to "44.44",
+            "100 USD in EUR" to "€",
+        ).forEachIndexed { i, (expression, expect) ->
+            compose.onNodeWithTag("searchField").performTextClearance()
+            compose.onNodeWithTag("searchField").performTextInput(expression)
+            compose.waitUntil(30_000) { compose.onAllNodesWithText(expect, substring = true).fetchSemanticsNodes().isNotEmpty() }
+            shot("%02d-calc-%s".format(9 + i, expression.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')))
+        }
+        scenario.close()
+    }
+}

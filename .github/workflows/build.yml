@@ -119,7 +119,7 @@ jobs:
             adb install -r $(find apks -name 'app-x86_64-release.apk')
             adb install -r $(find apks -name '*androidTest.apk')
             adb logcat -c
-            adb shell am instrument -w app.onlysearch.test/androidx.test.runner.AndroidJUnitRunner | tee out/instrument.txt
+            adb shell am instrument -w -e class app.onlysearch.SoulverTest app.onlysearch.test/androidx.test.runner.AndroidJUnitRunner | tee out/instrument.txt
             adb logcat -d -s SoulverTest:I AndroidRuntime:E DEBUG:* linker:* | tee out/logcat.txt
             adb shell am start -W -n app.onlysearch/.MainActivity && sleep 8 && adb exec-out screencap -p > out/1-home.png
             adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null; sleep 1

@@ -15,7 +15,8 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var apps: Apps
-    private lateinit var widgets: Widgets
+    lateinit var widgets: Widgets // public for the screenshot test
+        private set
     private val homeTick = mutableIntStateOf(0)
     private val stopTick = mutableIntStateOf(0)
     private val resumeTick = mutableIntStateOf(0)
