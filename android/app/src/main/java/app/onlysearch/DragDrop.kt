@@ -68,8 +68,10 @@ internal suspend fun PointerInputScope.tapHoldDrag(
     onDragStart: ((grab: Offset, at: Offset) -> Unit)?,
     onDrag: (Offset) -> Unit = {},
     onDragEnd: () -> Unit = {},
+    enabled: () -> Boolean = { true },
 ) = awaitEachGesture {
     val down = awaitFirstDown(requireUnconsumed = false, pass = pass)
+    if (!enabled()) return@awaitEachGesture
     DragDropPressing.value = true
     try { tapHoldDragBody(down, coords, pass, onPress, onTap, onLongPress, onDragStart, onDrag, onDragEnd) } finally { DragDropPressing.value = false }
 }

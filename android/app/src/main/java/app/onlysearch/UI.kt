@@ -510,7 +510,7 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
             .pointerInput(Unit) {
                 detectTapGestures(onTap = { selected = null }, onDoubleTap = { if (dnd.item == null) actions.onGesture("gDoubleTap") }, onLongPress = {
                     // A held app or widget handles its own long press.
-                    if (!DragDropPressing.value && dnd.item == null) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuAt = it.round(); menu = true }
+                    if (!DragDropPressing.value && dnd.item == null && selected == null) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuAt = it.round(); menu = true }
                 })
             }
             .testTag("home")
@@ -631,19 +631,20 @@ internal fun HomeGrid(apps: Apps, widgets: Widgets, index: Int, page: HomePage, 
                     Box(
                         Modifier.offset(cw * c.x, ch * c.y).size(cw * c.w, ch * c.h).onGloballyPositioned { coords[0] = it }
                             .graphicsLayer { alpha = if (lifted) 0.25f else 1f }
-                            .pointerInput(c.key, framed) {
+                            .pointerInput(c.key) {
                                 // Initial pass: see the touch before the widget's own view, take it over after a long press.
-                                // Once framed, touches belong to the resize handles and the widget.
-                                if (!framed) tapHoldDrag(
+                                // Once framed, new touches belong to the resize handles and the widget.
+                                tapHoldDrag(
                                     { coords[0] }, PointerEventPass.Initial, onTap = null,
                                     // Once framed, holds belong to the resize handles.
                                     onLongPress = { if (!prefs.lockLayout && !framed) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onSelect(c.key) } },
                                     onDragStart = { grab, at ->
-                                        if (prefs.lockLayout || framed) return@tapHoldDrag
+                                        if (prefs.lockLayout) return@tapHoldDrag
                                         onSelect(null)
                                         dnd.start(Dragged(now.key, now.w, now.h, "grid", grab, Size(cw.toPx() * now.w, ch.toPx() * now.h)), at)
                                     },
                                     onDrag = dnd::move, onDragEnd = { if (dnd.item != null) dnd.end() },
+                                    enabled = { !framed },
                                 )
                             },
                         contentAlignment = Alignment.Center,
@@ -1349,8 +1350,9 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
         else { delay(60); withContext(Dispatchers.IO) { searchContacts(context, query) } }
     }
     val wantsPeople = prefs.srcContacts && !contactsOk && query.trim().length >= 2 && query.any(Char::isLetter)
+    val keyboard = LocalSoftwareKeyboardController.current
     val openSetting = { e: SettingsEntry ->
-        if (e.page != null) onSettings(e.page)
+        if (e.page != null) { keyboard?.hide(); onSettings(e.page) }
         else runCatching { context.startActivity(Intent(e.action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { context.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         Unit
@@ -1450,10 +1452,13 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
                 }
             }
         }
+        val total = matches.size + people.size + settingsHits.size
+        val counted = "$total ${if (total == 1) "result" else "results"} · %.0f ms".format(matchMicros / 1000.0)
         val (left, right) = when {
             query.isBlank() -> "↵ open top hit" to "long-press for actions"
             c != null -> "↵ copy answer" to "long-press app for actions"
-            top != null -> "↵ open ${top.first.label}" to "${matches.size + people.size + settingsHits.size} results · %.0f ms".format(matchMicros / 1000.0)
+            top != null -> "↵ open ${top.first.label}" to counted
+            total > 0 -> "" to counted
             else -> "no matches" to ""
         }
         Row(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF22252A))) {}

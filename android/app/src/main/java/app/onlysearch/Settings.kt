@@ -497,9 +497,11 @@ private fun SourcesSettings() {
             {
                 Box {
                     ValueRow("Search engine", prefs.engine) { engines = true }
-                    DropdownMenu(engines, { engines = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
-                        listOf("Google", "DuckDuckGo", "Bing", "Startpage").forEach { e ->
-                            DropdownMenuItem({ Text(e, color = if (e == prefs.engine) Accent else Fg) }, { prefs.engine = e; engines = false })
+                    Box(Modifier.align(Alignment.BottomEnd)) {
+                        DropdownMenu(engines, { engines = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
+                            listOf("Google", "DuckDuckGo", "Bing", "Startpage").forEach { e ->
+                                DropdownMenuItem({ Text(e, color = if (e == prefs.engine) Accent else Fg) }, { prefs.engine = e; engines = false })
+                            }
                         }
                     }
                 }
@@ -547,9 +549,11 @@ private fun CalcSettings() {
             {
                 Box {
                     ValueRow("Home currency", "${prefs.homeCurrency} ${Currencies.firstOrNull { it.first == prefs.homeCurrency }?.second.orEmpty()}".trim()) { currencies = true }
-                    DropdownMenu(currencies, { currencies = false }, Modifier.heightIn(max = 360.dp), shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
-                        Currencies.forEach { (code, sym) ->
-                            DropdownMenuItem({ Text("$code  $sym", color = if (code == prefs.homeCurrency) Accent else Fg) }, { prefs.homeCurrency = code; currencies = false })
+                    Box(Modifier.align(Alignment.BottomEnd)) {
+                        DropdownMenu(currencies, { currencies = false }, Modifier.heightIn(max = 360.dp), shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
+                            Currencies.forEach { (code, sym) ->
+                                DropdownMenuItem({ Text("$code  $sym", color = if (code == prefs.homeCurrency) Accent else Fg) }, { prefs.homeCurrency = code; currencies = false })
+                            }
                         }
                     }
                 }
@@ -557,12 +561,14 @@ private fun CalcSettings() {
             {
                 Box {
                     ValueRow("Unit system", UnitSystems.first { it.first == prefs.unitSystem }.second) { systems = true }
-                    DropdownMenu(systems, { systems = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
-                        UnitSystems.forEach { (id, name) ->
-                            DropdownMenuItem({ Text(name, color = if (id == prefs.unitSystem) Accent else Fg) }, {
-                                prefs.unitSystem = id; systems = false
-                                scope.launch { Soulver.setUnitSystem(id) }
-                            })
+                    Box(Modifier.align(Alignment.BottomEnd)) {
+                        DropdownMenu(systems, { systems = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
+                            UnitSystems.forEach { (id, name) ->
+                                DropdownMenuItem({ Text(name, color = if (id == prefs.unitSystem) Accent else Fg) }, {
+                                    prefs.unitSystem = id; systems = false
+                                    scope.launch { Soulver.setUnitSystem(id) }
+                                })
+                            }
                         }
                     }
                 }
@@ -570,9 +576,11 @@ private fun CalcSettings() {
             {
                 Box {
                     ValueRow("↵ on a result", if (prefs.enterCopies == "both") "Copy expression = answer" else "Copy answer") { enter = true }
-                    DropdownMenu(enter, { enter = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
-                        listOf("answer" to "Copy answer", "both" to "Copy expression = answer").forEach { (id, name) ->
-                            DropdownMenuItem({ Text(name, color = if (id == prefs.enterCopies) Accent else Fg) }, { prefs.enterCopies = id; enter = false })
+                    Box(Modifier.align(Alignment.BottomEnd)) {
+                        DropdownMenu(enter, { enter = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
+                            listOf("answer" to "Copy answer", "both" to "Copy expression = answer").forEach { (id, name) ->
+                                DropdownMenuItem({ Text(name, color = if (id == prefs.enterCopies) Accent else Fg) }, { prefs.enterCopies = id; enter = false })
+                            }
                         }
                     }
                 }
@@ -598,9 +606,11 @@ private fun DockSettings() {
             {
                 Box {
                     ValueRow("Position", SearchBars.first { it.first == prefs.searchBar }.second) { positions = true }
-                    DropdownMenu(positions, { positions = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
-                        SearchBars.forEach { (id, name) ->
-                            DropdownMenuItem({ Text(name, color = if (id == prefs.searchBar) Accent else Fg) }, { prefs.searchBar = id; positions = false })
+                    Box(Modifier.align(Alignment.BottomEnd)) {
+                        DropdownMenu(positions, { positions = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
+                            SearchBars.forEach { (id, name) ->
+                                DropdownMenuItem({ Text(name, color = if (id == prefs.searchBar) Accent else Fg) }, { prefs.searchBar = id; positions = false })
+                            }
                         }
                     }
                 }

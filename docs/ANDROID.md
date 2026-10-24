@@ -23,7 +23,8 @@ CI emulators: Android 14 (required) and Android 17 / 37.2 with 16 KB pages (best
 - Time zone: we `Os.setenv("TZ", <device tz>)` before loading; "9:35am in New York to Japan" → 10:35 PM is correct.
 - APK size: 84.5 MB arm64 (lib_FoundationICU.so alone is 40 MB, stored uncompressed). Compressing native libs or trimming ICU data could shrink it.
 - Measured on the CI emulator (x86_64, software GPU, slow): init ~380 ms, first eval ~670 ms (now warmed up during init), warm evals ~0.7–8 ms (500-eval average 7.7 ms). Real-device numbers still to measure.
-- Currency: built-in standard rates only (100 USD → €87.93). **Crypto is not covered by the standard rates** (`0.5 BTC in USD` → `$0.50`, wrong). This Android build exposes `CurrencyRateProvider` but no ECB provider, so live fiat + crypto rates need our own provider (fetch rates in Kotlin or Swift, return them from `rateFor`).
+- Currency: SoulverCore's built-in standard rates don't cover crypto, so the bridge sets its own `CurrencyRateProvider` (`Rates` in `Bridge.swift`). Kotlin (`Soulver.refreshRates`) fetches fiat from open.er-api.com and the top 10 crypto from CoinGecko (no keys) when the cached set is older than 6 h, and passes them as `CODE=perUSD;…` through `nativeSetRates`. Until the first fetch succeeds the standard rates apply. Unit system (metric / imperial / US customary) goes through `nativeSetUnitSystem`; both rebuild the `Calculator` because its customization is fixed at creation.
+- A local build with native libs extracted from an older CI APK lacks those two calls; `Soulver` ignores the `UnsatisfiedLinkError`, so everything else still works.
 
 ## Signing and versions
 Releases are signed with a permanent PKCS12 key, alias `onlysearch`, certificate SHA-256 `a67aee0e…3cf3`.
@@ -41,7 +42,6 @@ Two gotchas found the hard way:
 CI emulator gesture tests are unreliable: the runner is CPU-starved, `input swipe` gets batched, and System UI ANR dialogs appear. Verify motion on a real device.
 
 ## Known gaps / next
-- Live currency + crypto rate provider (see above).
 - Alternative-units table from the mock-up (needs a second conversion per target unit).
 - Licensing with Soulver before any public distribution.
-- Weather in the home header: no data source; date only.
+- Weather in the home header: left out on purpose (no data source wanted); the line under the clock shows the next calendar event when enabled.
