@@ -99,8 +99,13 @@ class ScreenshotTest {
         // up to time-zone conversion. Numbered so the files sort in that order.
         compose.onNodeWithTag("homeSearch").performClick()
         shot("10-search-empty", 1500)
-        compose.onNodeWithTag("searchField").performTextInput("ca")
-        shot("11-search-apps")
+        // App search: prefix, several matches, fuzzy letters, and an app with its shortcuts listed.
+        listOf("ca" to "prefix-ca", "ma" to "matches-ma", "gml" to "fuzzy-gml", "phts" to "fuzzy-phts", "chrome" to "shortcuts-chrome", "set" to "settings")
+            .forEachIndexed { i, (q, name) ->
+                compose.onNodeWithTag("searchField").performTextClearance()
+                compose.onNodeWithTag("searchField").performTextInput(q)
+                shot("%02d-apps-%s".format(11 + i, name))
+            }
 
         listOf(
             "arithmetic" to "2+2",
