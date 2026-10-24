@@ -51,6 +51,9 @@ data class Cell(val key: String, val x: Int, val y: Int, val w: Int = 1, val h: 
 data class HomePage(val items: List<Cell> = emptyList(), val id: Long = nextPageId++)
 private var nextPageId = 0L
 
+/** A drawer tab: a named set of app keys. */
+data class AppGroup(val name: String, val apps: List<String>)
+
 data class Shortcut(val label: String, val app: App, val info: ShortcutInfo)
 
 /** Installed apps, icons, and the user's pins / launch counts. All state is Compose-observable. */
@@ -73,6 +76,12 @@ class Apps(private val context: Context) {
     /** Apps shown in the drawer and search: everything not hidden. */
     val visible get() = all.filter { it.key !in hidden }
     private val systemLabels = mutableMapOf<String, String>()
+    val groups = mutableStateListOf<AppGroup>().apply {
+        val arr = JSONArray(sp.getString("groups", "[]"))
+        addAll((0 until arr.length()).map { i ->
+            arr.getJSONObject(i).run { val a = getJSONArray("apps"); AppGroup(getString("name"), (0 until a.length()).map(a::getString)) }
+        })
+    }
     private val counts = mutableStateMapOf<String, Int>()
     val loaded = mutableStateOf(false)
 
@@ -267,6 +276,18 @@ class Apps(private val context: Context) {
     fun hide(app: App, hide: Boolean) {
         hidden.remove(app.key); if (hide) hidden.add(app.key)
         sp.edit { putString("hidden", hidden.joinToString("\n")) }
+    }
+
+    /** Adds the group at [index] (-1 = new) or replaces it. */
+    fun saveGroup(index: Int, group: AppGroup) {
+        if (index in groups.indices) groups[index] = group else groups.add(group)
+        saveGroups()
+    }
+
+    fun deleteGroup(index: Int) { groups.removeAt(index); saveGroups() }
+
+    private fun saveGroups() = sp.edit {
+        putString("groups", JSONArray(groups.map { JSONObject().put("name", it.name).put("apps", JSONArray(it.apps)) }).toString())
     }
 
     fun systemLabel(app: App) = systemLabels[app.key] ?: app.label

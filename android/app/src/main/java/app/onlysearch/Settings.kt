@@ -70,6 +70,11 @@ class Prefs(context: Context) {
     var iconShape by P("set.iconShape", "squircle")
     var labels by P("set.labels", true)
     var lockLayout by P("set.lockLayout", false)
+
+    // App drawer
+    var drawerColumns by P("set.drawerColumns", 4)
+    var suggested by P("set.suggested", true)
+    var scrubber by P("set.scrubber", true)
 }
 
 lateinit var prefs: Prefs
@@ -114,7 +119,9 @@ private fun settingsPages(apps: Apps): List<Page> = listOf(
     Page("home", "Layout", SIc.home, false, "Home screen", { "Grid ${prefs.columns} × ${prefs.rows} · icons ${prefs.iconSize}%" },
         "columns rows grid icon size shape labels lock layout") { HomeSettings() },
     Page("dock", "Layout", SIc.dock, false, "Dock & search bar", { "4 icons · search bar at bottom" }, "", null),
-    Page("drawer", "Layout", SIc.drawer, false, "App drawer & folders", { "Vertical · A–Z scrubber" }, "", null),
+    Page("drawer", "Layout", SIc.drawer, false, "App drawer & folders",
+        { listOfNotNull("${prefs.drawerColumns} columns", "A–Z scrubber".takeIf { prefs.scrubber }, apps.groups.size.let { if (it == 1) "1 group" else "$it groups" }).joinToString(" · ") },
+        "drawer columns suggested scrubber groups folders hidden apps unhide") { DrawerSettings(apps) },
     Page("gestures", "Behaviour", SIc.gestures, false, "Gestures", { "Swipe up: app drawer" }, "", null),
     Page("look", "Behaviour", SIc.look, false, "Look & feel", { "Dark · sky accent" }, "", null),
     Page("backup", "System", SIc.backup, false, "Backup & restore", { "Last backup: never" }, "", null),
@@ -359,4 +366,30 @@ private fun ThinSlider(value: Int, range: IntRange, step: Int, onChange: (Int) -
         Box(Modifier.fillMaxWidth(frac).height(4.dp).clip(CircleShape).background(Accent))
         Box(Modifier.offset(x = (maxWidth - 20.dp) * frac).size(20.dp).clip(CircleShape).background(Accent).border(3.dp, SettingsBg, CircleShape))
     }
+}
+
+@Composable
+private fun DrawerSettings(apps: Apps) {
+    var editing by remember { mutableStateOf<Int?>(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Group(null, listOf(
+            { Stepper("Columns", prefs.drawerColumns, 3..6) { prefs.drawerColumns = it } },
+            { SwitchRow("Suggested apps", "Your most used apps at the top", prefs.suggested) { prefs.suggested = it } },
+            { SwitchRow("A–Z scrubber", "Letter strip on the right edge", prefs.scrubber) { prefs.scrubber = it } },
+        ))
+        Group("Groups", apps.groups.mapIndexed<AppGroup, @Composable () -> Unit> { i, g -> { ValueRow(g.name, "${g.apps.size} apps", Muted) { editing = i } } } +
+            listOf<@Composable () -> Unit>({ ValueRow("New group", "+", Accent) { editing = -1 } }))
+        val hidden = apps.hidden.mapNotNull(apps::byKey)
+        if (hidden.isNotEmpty()) Group("Hidden apps", hidden.map<App, @Composable () -> Unit> { app ->
+            {
+                Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AppIcon(apps, app, 34.dp)
+                    Text(app.label, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    Chip("Unhide", Color.Transparent, ChipLine, Inter, 13) { apps.hide(app, false) }
+                }
+            }
+        })
+    }
+    editing?.let { i -> GroupEditor(apps, i) { editing = null } }
 }
