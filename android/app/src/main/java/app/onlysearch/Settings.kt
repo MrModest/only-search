@@ -182,7 +182,9 @@ private fun settingsPages(apps: Apps): List<Page> = listOf(
     Page("look", "Behaviour", SIc.look, false, "Look & feel",
         { listOfNotNull(if (prefs.black) "Black" else "Dark", "${prefs.accent} accent", "themed icons".takeIf { prefs.themedIcons }).joinToString(" · ") },
         "theme accent colour color dark black themed icons monochrome wallpaper dim") { LookSettings() },
-    Page("backup", "System", SIc.backup, false, "Backup & restore", { "Last backup: never" }, "", null),
+    Page("backup", "System", SIc.backup, false, "Backup & restore",
+        { "Last backup: " + prefs.sp.getLong("lastBackup", 0L).let { if (it == 0L) "never" else ago(it) } },
+        "backup restore export import json file") { BackupSettings() },
 )
 
 private fun isDefaultHome(context: Context): Boolean =
@@ -644,5 +646,83 @@ private fun LookSettings() {
                 }
             },
         ))
+    }
+}
+
+/** Every launcher pref as typed JSON ({"key": {"t": "s|i|l|b|f", "v": …}}), minus cached currency rates. */
+internal fun backupJson(): String {
+    val out = org.json.JSONObject().put("app", "only-search").put("version", 1)
+    val data = org.json.JSONObject()
+    prefs.sp.all.forEach { (k, v) ->
+        if (k == "rates" || k == "ratesAt") return@forEach
+        val t = when (v) { is String -> "s"; is Int -> "i"; is Long -> "l"; is Boolean -> "b"; is Float -> "f"; else -> return@forEach }
+        data.put(k, org.json.JSONObject().put("t", t).put("v", v))
+    }
+    return out.put("prefs", data).toString(2)
+}
+
+/** Replaces all launcher prefs with the backup's. Throws on a file that isn't one of ours. */
+internal fun restoreJson(json: String) {
+    val root = org.json.JSONObject(json)
+    require(root.optString("app") == "only-search") { "Not an Only Search backup" }
+    val data = root.getJSONObject("prefs")
+    prefs.sp.edit(commit = true) {
+        clear()
+        data.keys().forEach { k ->
+            val e = data.getJSONObject(k)
+            when (e.getString("t")) {
+                "s" -> putString(k, e.getString("v")); "i" -> putInt(k, e.getInt("v")); "l" -> putLong(k, e.getLong("v"))
+                "b" -> putBoolean(k, e.getBoolean("v")); "f" -> putFloat(k, e.getDouble("v").toFloat())
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackupSettings() {
+    val context = LocalContext.current
+    var last by remember { mutableStateOf(prefs.sp.getLong("lastBackup", 0L)) }
+    var restoring by remember { mutableStateOf<String?>(null) }
+    val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching { context.contentResolver.openOutputStream(uri)!!.use { it.write(backupJson().toByteArray()) } }
+            .onSuccess {
+                last = System.currentTimeMillis(); prefs.sp.edit { putLong("lastBackup", last) }
+                android.widget.Toast.makeText(context, "Backup saved", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            .onFailure { android.widget.Toast.makeText(context, "Couldn't save: ${it.message}", android.widget.Toast.LENGTH_LONG).show() }
+    }
+    val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching { context.contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() } }
+            .onSuccess { restoring = it }
+            .onFailure { android.widget.Toast.makeText(context, "Couldn't read the file", android.widget.Toast.LENGTH_LONG).show() }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Group(null, listOf(
+            { ValueRow("Back up now", if (last == 0L) "never backed up" else "last ${ago(last)}", Muted) {
+                save.launch("only-search-backup-" + java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()) + ".json")
+            } },
+            { ValueRow("Restore from a file", "", Muted) { open.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) } },
+        ))
+        Text("A backup holds your home pages, dock, drawer groups, hidden apps, custom names, gestures, all settings and calculator history. " +
+            "Widgets come back on this phone; on another phone, add them again.", color = Muted, fontSize = 13.sp, lineHeight = 19.sp,
+            modifier = Modifier.padding(horizontal = 4.dp))
+    }
+    restoring?.let { json ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { restoring = null }, containerColor = PopupBg,
+            title = { Text("Replace your setup?", fontSize = 18.sp) },
+            text = { Text("Your current layout and settings are replaced by the backup. The launcher restarts.", color = Muted) },
+            confirmButton = {
+                Text("Restore", color = Accent, fontSize = 15.sp, modifier = Modifier.clip(CircleShape).clickable {
+                    restoring = null
+                    runCatching { restoreJson(json) }
+                        .onSuccess { (context as android.app.Activity).recreate() }
+                        .onFailure { android.widget.Toast.makeText(context, it.message ?: "Not a backup file", android.widget.Toast.LENGTH_LONG).show() }
+                }.padding(12.dp))
+            },
+            dismissButton = { Text("Cancel", color = Muted, fontSize = 15.sp, modifier = Modifier.clip(CircleShape).clickable { restoring = null }.padding(12.dp)) },
+        )
     }
 }
