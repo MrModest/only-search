@@ -11,10 +11,16 @@ nonisolated(unsafe) private var unitSystem = UnitMeasurementSystem.metric
 /** Live rates fetched by the app (units of each currency per 1 USD). Unknown codes return nil. */
 private final class Rates: CurrencyRateProvider {
     var perUSD: [String: Decimal] = [:]
+    /** The last few requests the engine made, for nativeRateLog (diagnostics). */
+    var log: [String] = []
     func rateFor(request: CurrencyRateRequest) -> Decimal? {
-        guard let from = perUSD[request.fromCurrency.uppercased()], let to = perUSD[request.toCurrency.uppercased()], from != 0 else { return nil }
-        return to / from
+        let from = perUSD[request.fromCurrency.uppercased()], to = perUSD[request.toCurrency.uppercased()]
+        let rate: Decimal? = if let from, let to, from != 0 { to / from } else { nil }
+        log.append("\(request.fromCurrency)->\(request.toCurrency) q=\(request.quantity) unit=\(request.fromCurrencyUnit.rawValue)->\(request.toCurrencyUnit.rawValue) = \(rate.map { "\($0)" } ?? "nil")")
+        if log.count > 20 { log.removeFirst() }
+        return rate
     }
+    func fetchRateInBackgroundFor(request: CurrencyRateRequest) async -> Decimal? { rateFor(request: request) }
 }
 nonisolated(unsafe) private let rates = Rates()
 
@@ -62,6 +68,11 @@ public func nativeInit(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ p
     base = EngineCustomization(resourcesBundle: bundle, locale: Locale(identifier: swiftString(env, locale)))
     rebuild()
     return 1
+}
+
+@_cdecl("Java_app_onlysearch_Soulver_nativeRateLog")
+public func nativeRateLog(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?) -> jstring? {
+    javaString(env, rates.log.joined(separator: "\n"))
 }
 
 /** "metric", "imperial" or "customaryUS". */

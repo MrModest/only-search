@@ -24,6 +24,11 @@ object Soulver {
     private external fun nativeEval(expression: String): String?
     private external fun nativeSetUnitSystem(system: String)
     private external fun nativeSetRates(rates: String)
+    private external fun nativeRateLog(): String
+
+    /** Recent rate requests from the engine (diagnostics for SoulverTest). */
+    fun rateLogBlocking(): String = runCatching { nativeRateLog() }.getOrDefault("")
+    fun setRatesBlocking(rates: String) { if (ready) runCatching { nativeSetRates(rates) } }
 
     /** Blocking; call off the main thread or through [evaluate]. */
     fun initBlocking(context: Context): Boolean {
