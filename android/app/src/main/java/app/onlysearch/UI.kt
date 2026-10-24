@@ -224,7 +224,7 @@ internal fun Label(text: String, modifier: Modifier = Modifier, color: Color = M
 internal fun shadowed() = LocalTextStyle.current.copy(shadow = TextShadow)
 
 @Composable
-fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeTick: Int, initialQuery: String?) {
+fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeTick: Int, initialQuery: String?, typed: Pair<Int, String>) {
     val scope = rememberCoroutineScope()
     val activity = LocalContext.current as Activity
     val screenPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
@@ -250,14 +250,31 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     }
     fun dragDrawer(deltaPx: Float) = scope.launch { drawer.snapTo((drawer.value - deltaPx / screenPx).coerceIn(0f, 1f)) }
     val drawerOpening by remember { derivedStateOf { drawer.targetValue > 0f } }
-    fun closeSearch() { searching = false; query = "" }
+    fun closeSearch() { searching = false; if (prefs.resetQuery) query = "" }
+    var lockPrompt by remember { mutableStateOf(false) }
+    fun run(action: String) {
+        when {
+            action == "search" -> searching = true
+            action == "drawer" -> settleDrawer(true)
+            action == "notifications" -> expandNotifications(activity)
+            action == "lock" -> if (!lockScreen()) lockPrompt = true
+            action == "edit" -> editing = true
+            action == "history" -> { query = ""; searching = true }
+            action == "settings" -> settings = "hub"
+            action.startsWith("app:") -> apps.byKey(action.removePrefix("app:"))?.let { apps.launch(it) }
+            action.startsWith("shortcut:") -> apps.pinnedShortcut(action.removePrefix("shortcut:"))?.let { apps.launch(it) }
+        }
+    }
+    // A hardware key typed on home opens search with that character.
+    LaunchedEffect(typed.first) { if (typed.first > 0 && !searching) { query = typed.second; searching = true } }
 
     // Home button: animate back. Leaving to an app: reset silently so the launch animation isn't disturbed.
     LaunchedEffect(homeTick) {
         if (homeTick == 0) return@LaunchedEffect
         val onHome = !searching && !picking && settings == null && !editing && drawer.value == 0f
         closeSearch(); picking = false; settings = null; editing = false; settleDrawer(false)
-        if (onHome) pager.animateScrollToPage(apps.defaultPage)
+        // Home pressed on home: back to the default page first, then the "Home button on home" gesture.
+        if (onHome) { if (pager.currentPage != apps.defaultPage) pager.animateScrollToPage(apps.defaultPage) else run(gesture("gHome")) }
     }
     LaunchedEffect(stopTick) { if (stopTick > 0) { closeSearch(); picking = false; drawerBlur = false; drawer.snapTo(0f) } }
     LaunchedEffect(resumeTick) {
@@ -310,6 +327,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             onPickWidget = { pickFor = null; picking = true },
             onSettings = { settings = it },
             onEdit = { editing = true },
+            onGesture = { run(gesture(it)) },
         )
     }
 
@@ -402,6 +420,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             }
             if (dnd.item?.from.let { it == "grid" || it == "dock" }) RemoveZone(dnd)
             DragGhost(apps, dnd)
+            if (lockPrompt) LockPrompt { lockPrompt = false }
         }
     }
     }
@@ -448,7 +467,7 @@ private fun DragGhost(apps: Apps, dnd: DragDrop) {
 
 internal class HomeActions(
     val onSearch: () -> Unit, val onVoice: (String) -> Unit, val onDrag: (Float) -> Unit, val onDragEnd: (Float) -> Unit, val onPickWidget: () -> Unit,
-    val onSettings: (String) -> Unit, val onEdit: () -> Unit,
+    val onSettings: (String) -> Unit, val onEdit: () -> Unit, val onGesture: (String) -> Unit,
 )
 
 @Composable
@@ -462,12 +481,28 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
     LaunchedEffect(prefs.columns, prefs.rows) { apps.fitGrid() }
     LaunchedEffect(pager.currentPage) { selected = null }
     var menuAt by remember { mutableStateOf(IntOffset.Zero) }
+    // Swipes: "Swipe up" set to the drawer follows the finger; anything else fires on release past [swipe].
+    val swipe = with(LocalDensity.current) { 60.dp.toPx() }
+    val travel = remember { floatArrayOf(0f) }
+    val multi = remember { booleanArrayOf(false) }
     Box(
         Modifier.fillMaxSize()
-            .pointerInput(Unit) { detectPinchIn(actions.onEdit) }
-            .draggable(rememberDraggableState(actions.onDrag), Orientation.Vertical, onDragStopped = { actions.onDragEnd(it) })
+            .pointerInput(Unit) { detectMultiTouch(onMulti = { multi[0] = it }, onPinch = { actions.onGesture("gPinch") }, onTwoDown = { actions.onGesture("gTwoDown") }) }
+            .draggable(
+                rememberDraggableState { d -> travel[0] += d; if (gesture("gUp") == "drawer" && !multi[0]) actions.onDrag(d) }, Orientation.Vertical,
+                onDragStarted = { travel[0] = 0f },
+                onDragStopped = { v ->
+                    val up = gesture("gUp")
+                    if (up == "drawer") actions.onDragEnd(if (multi[0]) 1000f else v)
+                    when {
+                        multi[0] -> {}
+                        travel[0] > swipe && v >= 0f -> actions.onGesture("gDown")
+                        up != "drawer" && travel[0] < -swipe && v <= 0f -> actions.onGesture("gUp")
+                    }
+                },
+            )
             .pointerInput(Unit) {
-                detectTapGestures(onTap = { selected = null }, onLongPress = {
+                detectTapGestures(onTap = { selected = null }, onDoubleTap = { if (dnd.item == null) actions.onGesture("gDoubleTap") }, onLongPress = {
                     // A held app or widget handles its own long press.
                     if (!DragDropPressing.value && dnd.item == null) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuAt = it.round(); menu = true }
                 })
@@ -490,7 +525,10 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
         Column(Modifier.padding(horizontal = 18.dp)) {
             PageDots(apps.pages.size, pager.currentPage, Modifier.padding(top = 18.dp, bottom = 16.dp))
             if (prefs.searchBar == "above") pill(Modifier.padding(bottom = 16.dp))
-            if (prefs.showDock) Box(Modifier.heightIn(min = 58.dp).onGloballyPositioned { dnd.dock = it.boundsInWindow() }) {
+            val dockTravel = remember { floatArrayOf(0f) }
+            if (prefs.showDock) Box(Modifier.heightIn(min = 58.dp).onGloballyPositioned { dnd.dock = it.boundsInWindow() }
+                .draggable(rememberDraggableState { dockTravel[0] += it }, Orientation.Vertical, onDragStarted = { dockTravel[0] = 0f },
+                    onDragStopped = { v -> if (dockTravel[0] < -swipe && v <= 0f) actions.onGesture("gDock") })) {
                 AppGrid(apps, apps.dock.take(prefs.dockSize).mapNotNull(apps::byKey), size = 58.dp * prefs.iconSize / 100, labelColor = null,
                     columns = prefs.dockSize, drag = "dock")
             } else LaunchedEffect(Unit) { dnd.dock = Rect.Zero }
@@ -520,17 +558,28 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
 internal fun pickWallpaper(context: android.content.Context) =
     context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Wallpaper"))
 
-/** Fires once when two fingers pinch together. Only watches; never consumes, so other gestures still work. */
-internal suspend fun PointerInputScope.detectPinchIn(onPinch: () -> Unit) = awaitEachGesture {
+/**
+ * Two-finger gestures, watched without consuming so single-finger ones still work: a pinch in, or both fingers
+ * moving down. [onMulti] says whether the current gesture has had two fingers, so the swipe handler can ignore it.
+ */
+internal suspend fun PointerInputScope.detectMultiTouch(onMulti: (Boolean) -> Unit, onPinch: () -> Unit, onTwoDown: () -> Unit) = awaitEachGesture {
     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-    var start = 0f
+    onMulti(false)
+    var startDist = 0f
+    var startY = 0f
+    var fired = false
+    val travel = 80.dp.toPx()
     while (true) {
         val e = awaitPointerEvent(PointerEventPass.Initial)
         val down = e.changes.filter { it.pressed }
         if (down.isEmpty()) break
-        if (down.size < 2) continue
+        if (down.size < 2 || fired) continue
+        onMulti(true)
         val d = (down[0].position - down[1].position).getDistance()
-        if (start == 0f) start = d else if (d < start * 0.65f) { onPinch(); break }
+        val y = (down[0].position.y + down[1].position.y) / 2
+        if (startDist == 0f) { startDist = d; startY = y; continue }
+        if (d < startDist * 0.65f) { fired = true; onPinch() }
+        else if (y - startY > travel && d > startDist * 0.75f) { fired = true; onTwoDown() }
     }
 }
 

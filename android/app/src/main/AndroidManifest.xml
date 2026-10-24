@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- Currency and crypto rates for the calculator. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Pull down the notification shade from a home gesture. -->
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
     <!-- Optional: People results in search. Asked for only when the user taps "Allow" there. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
@@ -37,5 +39,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Optional; only used if the user turns it on for the "Lock screen" gesture. -->
+        <service
+            android:name=".LockService"
+            android:exported="false"
+            android:label="@string/lock_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/lock_service" />
+        </service>
     </application>
 </manifest>

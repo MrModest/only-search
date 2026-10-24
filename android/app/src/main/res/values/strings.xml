@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="lock_service_label">Only Search: lock screen gesture</string>
+    <string name="lock_service_description">Lets Only Search lock the screen or open notifications when you use a home screen gesture set to do that. It does not read anything on screen.</string>
+</resources>

@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.UserHandle
 import android.graphics.Color
 import android.widget.Toast
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -23,6 +24,7 @@ class MainActivity : ComponentActivity() {
     private val homeTick = mutableIntStateOf(0)
     private val stopTick = mutableIntStateOf(0)
     private val resumeTick = mutableIntStateOf(0)
+    private val typed = androidx.compose.runtime.mutableStateOf(0 to "")
 
     private val packageCallback = object : LauncherApps.Callback() {
         private fun reload() { lifecycleScope.launch { apps.load() } }
@@ -59,7 +61,7 @@ class MainActivity : ComponentActivity() {
         val query = intent.getStringExtra("query")
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                Launcher(apps, widgets, homeTick.intValue, stopTick.intValue, resumeTick.intValue, query)
+                Launcher(apps, widgets, homeTick.intValue, stopTick.intValue, resumeTick.intValue, query, typed.value)
             }
         }
     }
@@ -74,6 +76,15 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume(); resumeTick.intValue++
         lifecycleScope.launch { Soulver.refreshRates() }
+    }
+
+    // "Type anywhere to search": a printable key that nothing on screen took opens search with it.
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val c = event.unicodeChar
+        if (prefs.typeToSearch && c > 0 && !Character.isISOControl(c) && !event.isCtrlPressed) {
+            typed.value = typed.value.first + 1 to String(Character.toChars(c)); return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun onDestroy() {

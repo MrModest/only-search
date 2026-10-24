@@ -21,6 +21,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,6 +97,15 @@ class Prefs(context: Context) {
     var fuzzy by P("set.fuzzy", true)
     var engine by P("set.engine", "Google")
 
+    // Gestures: actions keyed by gesture ("gDown" → "search", "app:<key>", "shortcut:<key>")
+    private val gestureMap = mutableStateMapOf<String, String>().apply {
+        sp.all.forEach { (k, v) -> if (k.startsWith("set.g") && v is String) put(k.removePrefix("set."), v) }
+    }
+    fun gestureOf(key: String): String? = gestureMap[key]
+    fun setGesture(key: String, action: String) { gestureMap[key] = action; sp.edit { putString("set.$key", action) } }
+    var typeToSearch by P("set.typeToSearch", true)
+    var resetQuery by P("set.resetQuery", false)
+
     // Dock & search bar
     var dockSize by P("set.dockSize", 4)
     var showDock by P("set.showDock", true)
@@ -158,7 +168,9 @@ private fun settingsPages(apps: Apps): List<Page> = listOf(
     Page("drawer", "Layout", SIc.drawer, false, "App drawer & folders",
         { listOfNotNull("${prefs.drawerColumns} columns", "A–Z scrubber".takeIf { prefs.scrubber }, apps.groups.size.let { if (it == 1) "1 group" else "$it groups" }).joinToString(" · ") },
         "drawer columns suggested scrubber groups folders hidden apps unhide") { DrawerSettings(apps) },
-    Page("gestures", "Behaviour", SIc.gestures, false, "Gestures", { "Swipe up: app drawer" }, "", null),
+    Page("gestures", "Behaviour", SIc.gestures, false, "Gestures",
+        { "Swipe down: ${actionLabel(apps, gesture("gDown")).lowercase()} · double tap: ${actionLabel(apps, gesture("gDoubleTap")).lowercase().removeSuffix(" screen")}" },
+        "gestures swipe double tap pinch home button dock lock notifications type anywhere keyboard reset query") { GestureSettings(apps) },
     Page("look", "Behaviour", SIc.look, false, "Look & feel", { "Dark · sky accent" }, "", null),
     Page("backup", "System", SIc.backup, false, "Backup & restore", { "Last backup: never" }, "", null),
 )
