@@ -23,12 +23,22 @@ private final class Rates: CurrencyRateProvider {
     func fetchRateInBackgroundFor(request: CurrencyRateRequest) async -> Decimal? { rateFor(request: request) }
 }
 nonisolated(unsafe) private let rates = Rates()
+private let crypto: [String: [String]] = [
+    "BTC": ["BTC", "bitcoin", "bitcoins"], "ETH": ["ETH", "ether", "ethereum"], "SOL": ["SOL", "solana"], "XRP": ["XRP"],
+    "DOGE": ["DOGE", "dogecoin"], "ADA": ["ADA", "cardano"], "LTC": ["LTC", "litecoin"], "USDT": ["USDT", "tether"],
+    "BNB": ["BNB"], "DOT": ["DOT", "polkadot"],
+]
 
 // The calculator's customization is fixed at creation, so a settings change builds a new one.
 private func rebuild() {
     guard var c = base else { return }
     c.unitSystem = unitSystem
     if !rates.perUSD.isEmpty { c.currencyRateProvider = rates }
+    // The engine never asks the rate provider about crypto (it converts BTC 1:1), so crypto becomes custom units priced in USD.
+    for (code, names) in crypto {
+        guard let perUSD = rates.perUSD[code], perUSD != 0 else { continue }
+        for name in names { c.customUnits.append(CustomUnit(name: name, definition: 1 / perUSD, equivalentUnit: .currencyUSD)) }
+    }
     let calc = Calculator(customization: c)
     var formatting = FormattingPreferences()
     formatting.dp = 2

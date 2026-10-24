@@ -39,7 +39,7 @@ class SoulverTest {
         }
         // Our rate provider: fixed rates in, conversions out (live ones are fetched by the app, not here).
         Soulver.setRatesBlocking("USD=1;EUR=0.5;BTC=0.00001;ETH=0.0004")
-        listOf("100 USD in EUR" to "50", "0.5 BTC in USD" to "50,000", "1 ETH in EUR" to "1,250").forEach { (expr, expect) ->
+        listOf("100 USD in EUR" to "50", "0.5 BTC in USD" to "50,000", "1 ETH in EUR" to "1,250", "1000 USD in BTC" to "0.01", "2 bitcoin in usd" to "200,000").forEach { (expr, expect) ->
             val r = Soulver.evalBlocking(expr)
             Log.i(TAG, "provider: %-30s => %s".format(expr, r))
             if (!r.contains(expect)) failures += "provider: $expr => '$r' (want $expect)"
