@@ -349,7 +349,20 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
 
     CompositionLocalProvider(LocalDragDrop provides dnd, LocalPickWidgets provides { pkg: String? -> pickFor = pkg; picking = true }) {
     ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
-        Box(Modifier.fillMaxSize()) {
+        // Follows a drag from the root: the tile that started it may be disposed mid-drag (its page scrolled away).
+        Box(Modifier.fillMaxSize().pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                while (true) {
+                    val e = awaitPointerEvent(PointerEventPass.Initial)
+                    val c = e.changes.firstOrNull() ?: break
+                    if (dnd.item != null && dnd.item?.from != "popup" && dnd.item?.from != "picker") {
+                        if (c.pressed) dnd.move(c.position) else dnd.end()
+                    }
+                    if (e.changes.none { it.pressed }) break
+                }
+            }
+        }) {
             Box(Modifier.fillMaxSize().graphicsLayer {
                 val p = max(drawer.value, searchProgress)
                 val s = (1f - 0.06f * p) * (0.9f + 0.1f * enter.value)
@@ -455,7 +468,8 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
             .draggable(rememberDraggableState(actions.onDrag), Orientation.Vertical, onDragStopped = { actions.onDragEnd(it) })
             .pointerInput(Unit) {
                 detectTapGestures(onTap = { selected = null }, onLongPress = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuAt = it.round(); menu = true
+                    // A held app or widget handles its own long press.
+                    if (!DragDropPressing.value && dnd.item == null) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuAt = it.round(); menu = true }
                 })
             }
             .testTag("home")
@@ -465,7 +479,7 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
             Pill("Apps, math, units, time…", m.testTag("homeSearch"), onClick = actions.onSearch) { if (prefs.mic) MicButton(actions.onVoice) }
         }
         if (prefs.searchBar == "top") pill(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 16.dp))
-        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), key = { apps.pages.getOrNull(it)?.id ?: -1L }) { i ->
+        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 1, key = { apps.pages.getOrNull(it)?.id ?: -1L }) { i ->
             val page = apps.pages.getOrNull(i) ?: return@HorizontalPager
             Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
                 Clock()
@@ -555,17 +569,20 @@ internal fun HomeGrid(apps: Apps, widgets: Widgets, index: Int, page: HomePage, 
                 } else {
                     val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
                     val now by rememberUpdatedState(c)
+                    val framed by rememberUpdatedState(selected == c.key)
                     val lifted = dnd.item?.key == c.key
                     Box(
                         Modifier.offset(cw * c.x, ch * c.y).size(cw * c.w, ch * c.h).onGloballyPositioned { coords[0] = it }
                             .graphicsLayer { alpha = if (lifted) 0.25f else 1f }
-                            .pointerInput(c.key) {
+                            .pointerInput(c.key, framed) {
                                 // Initial pass: see the touch before the widget's own view, take it over after a long press.
-                                tapHoldDrag(
+                                // Once framed, touches belong to the resize handles and the widget.
+                                if (!framed) tapHoldDrag(
                                     { coords[0] }, PointerEventPass.Initial, onTap = null,
-                                    onLongPress = { if (!prefs.lockLayout) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onSelect(c.key) } },
+                                    // Once framed, holds belong to the resize handles.
+                                    onLongPress = { if (!prefs.lockLayout && !framed) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onSelect(c.key) } },
                                     onDragStart = { grab, at ->
-                                        if (prefs.lockLayout) return@tapHoldDrag
+                                        if (prefs.lockLayout || framed) return@tapHoldDrag
                                         onSelect(null)
                                         dnd.start(Dragged(now.key, now.w, now.h, "grid", grab, Size(cw.toPx() * now.w, ch.toPx() * now.h)), at)
                                     },
@@ -963,7 +980,7 @@ internal fun AppPopup(apps: Apps, app: App, anchor: Rect, hint: Boolean, onDismi
                 // The pressed icon, lit above the dim.
                 Box(Modifier.offset { IntOffset(a.left.roundToInt(), a.top.roundToInt()) }) { AppIcon(apps, app, with(density) { a.width.toDp() }, ring = true) }
                 if (hint) Text("drag to move · drag a shortcut out to pin it", color = Muted, fontSize = 11.sp, fontFamily = Mono,
-                    modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp))
+                    modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 190.dp))
                 Layout(
                     content = {
                         Box(Modifier.size(16.dp).graphicsLayer { rotationZ = 45f }.background(PopupBg).border(1.dp, PillLine))

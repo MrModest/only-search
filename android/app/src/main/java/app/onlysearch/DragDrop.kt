@@ -70,6 +70,24 @@ internal suspend fun PointerInputScope.tapHoldDrag(
     onDragEnd: () -> Unit = {},
 ) = awaitEachGesture {
     val down = awaitFirstDown(requireUnconsumed = false, pass = pass)
+    DragDropPressing.value = true
+    try { tapHoldDragBody(down, coords, pass, onPress, onTap, onLongPress, onDragStart, onDrag, onDragEnd) } finally { DragDropPressing.value = false }
+}
+
+/** Shared flag for [DragDrop.pressingTile]; a plain holder because the detector has no DragDrop at hand. */
+internal object DragDropPressing { var value = false }
+
+private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.tapHoldDragBody(
+    down: androidx.compose.ui.input.pointer.PointerInputChange,
+    coords: () -> LayoutCoordinates?,
+    pass: PointerEventPass,
+    onPress: (Boolean) -> Unit,
+    onTap: (() -> Unit)?,
+    onLongPress: () -> Unit,
+    onDragStart: ((grab: Offset, at: Offset) -> Unit)?,
+    onDrag: (Offset) -> Unit,
+    onDragEnd: () -> Unit,
+) {
     onPress(true)
     var outcome = 0 // 0 = held long enough, 1 = released, 2 = moved or cancelled
     withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
@@ -83,8 +101,8 @@ internal suspend fun PointerInputScope.tapHoldDrag(
         }
     }
     onPress(false)
-    if (outcome == 1) { onTap?.invoke(); return@awaitEachGesture }
-    if (outcome == 2) return@awaitEachGesture
+    if (outcome == 1) { onTap?.invoke(); return }
+    if (outcome == 2) return
     onLongPress()
     var dragging = false
     while (true) {
