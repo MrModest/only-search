@@ -234,6 +234,31 @@ class Apps(private val context: Context) {
 
     fun toggleDock(app: App) = toggle(dock, "dock", app, 4)
 
+    fun saveDock() = sp.edit { putString("dock", dock.joinToString("\n")) }
+
+    /** Moves an app into the dock at [index] (reordering if it's already there); takes it off the home grid. */
+    fun dropOnDock(key: String, index: Int) {
+        if (key !in dock && dock.size >= 4) return
+        dock.remove(key)
+        dock.add(index.coerceIn(0, dock.size), key)
+        dropItem(key); savePages(); saveDock()
+    }
+
+    /** [place], or for an app dropped on another app: the two swap cells. */
+    fun moveTo(page: Int, target: Cell): Boolean {
+        if (place(page, target)) return true
+        if (target.w != 1 || target.h != 1) return false
+        val other = pages[page].items.firstOrNull { it.x == target.x && it.y == target.y && it.w == 1 && it.h == 1 } ?: return false
+        val fromPage = pages.indexOfFirst { p -> p.items.any { it.key == target.key } }
+        if (fromPage < 0) return false
+        val from = pages[fromPage].items.first { it.key == target.key }
+        dropItem(other.key); dropItem(target.key)
+        pages[page] = pages[page].copy(items = pages[page].items + target)
+        pages[fromPage] = pages[fromPage].copy(items = pages[fromPage].items + other.copy(x = from.x, y = from.y))
+        savePages()
+        return true
+    }
+
     fun remember(expression: String, result: String) {
         history.removeAll { it.first == expression }
         history.add(0, expression to result)

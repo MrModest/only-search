@@ -98,6 +98,16 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.unit.toSize
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -212,6 +222,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     val pager = rememberPagerState(apps.defaultPage) { apps.pages.size }
     LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect { apps.currentPage = it } }
     val searchProgress by animateFloatAsState(if (searching) 1f else 0f, tween(180), label = "search")
+    val dnd = remember { DragDrop() }
 
     var drawerBlur by remember { mutableStateOf(false) }
     fun settleDrawer(open: Boolean) = scope.launch {
@@ -284,6 +295,30 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
         )
     }
 
+    dnd.onStart = { if (it.from == "drawer") settleDrawer(false) }
+    dnd.onDrop = { d, at ->
+        val page = pager.currentPage
+        val grid = apps.pages.getOrNull(page)?.let { dnd.grids[it.id] }
+        val target = grid?.let { dnd.target(d, at, it) }
+        when {
+            d.w == 1 && d.h == 1 && !d.key.startsWith("w:") && dnd.dock.contains(at) ->
+                apps.dropOnDock(d.key, ((at.x - dnd.dock.left) / (dnd.dock.width / 4)).toInt())
+            target != null -> if (apps.moveTo(page, target) && d.from == "dock") apps.dock.remove(d.key).also { apps.saveDock() }
+        }
+    }
+    // Dragging to a screen edge flips to the neighbouring page.
+    val edgePx = with(LocalDensity.current) { 28.dp.toPx() }
+    val widthPx = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+    LaunchedEffect(dnd.item != null) {
+        while (dnd.item != null) {
+            delay(500)
+            val p = pager.currentPage
+            if (dnd.pos.x < edgePx && p > 0) pager.animateScrollToPage(p - 1)
+            else if (dnd.pos.x > widthPx - edgePx && p < apps.pages.lastIndex) pager.animateScrollToPage(p + 1)
+        }
+    }
+
+    CompositionLocalProvider(LocalDragDrop provides dnd) {
     ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
         Box(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().graphicsLayer {
@@ -323,7 +358,24 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             ) {
                 SettingsScreen(apps, settings ?: "hub") { settings = null }
             }
+            DragGhost(apps, dnd)
         }
+    }
+    }
+}
+
+/** What's under the finger while dragging: the app icon, or an outline the size of the widget. */
+@Composable
+private fun DragGhost(apps: Apps, dnd: DragDrop) {
+    val d = dnd.item ?: return
+    val density = LocalDensity.current
+    val w = with(density) { d.size.width.toDp() }
+    val h = with(density) { d.size.height.toDp() }
+    Box(Modifier.offset { IntOffset((dnd.pos.x - d.grab.x).roundToInt(), (dnd.pos.y - d.grab.y).roundToInt()) }.size(w, h)
+        .graphicsLayer { scaleX = 1.08f; scaleY = 1.08f }) {
+        val app = apps.byKey(d.key)
+        if (app != null) AppIcon(apps, app, w)
+        else Box(Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).background(Accent.copy(alpha = 0.18f)).border(2.dp, Accent, RoundedCornerShape(24.dp)))
     }
 }
 
@@ -340,14 +392,17 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
     val haptic = LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf<String?>(null) }
+    val dnd = LocalDragDrop.current
     LaunchedEffect(prefs.columns, prefs.rows) { apps.fitGrid() }
+    LaunchedEffect(pager.currentPage) { selected = null }
     Column(
         Modifier.fillMaxSize()
             .pointerInput(Unit) { detectPinchIn(actions.onEdit) }
             .draggable(rememberDraggableState(actions.onDrag), Orientation.Vertical, onDragStopped = { actions.onDragEnd(it) })
             .combinedClickable(interactionSource = null, indication = null, onLongClick = {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress); menu = true
-            }) {}
+            }) { selected = null }
             .systemBarsPadding().padding(top = 24.dp, bottom = 12.dp).testTag("home")
     ) {
         HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), key = { apps.pages.getOrNull(it)?.id ?: -1L }) { i ->
@@ -355,12 +410,14 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
             Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
                 Clock()
                 Spacer(Modifier.height(24.dp))
-                HomeGrid(apps, widgets, page, Modifier.weight(1f).fillMaxWidth())
+                HomeGrid(apps, widgets, i, page, selected, { selected = it }, Modifier.weight(1f).fillMaxWidth())
             }
         }
         Column(Modifier.padding(horizontal = 18.dp)) {
             PageDots(apps.pages.size, pager.currentPage, Modifier.padding(vertical = 14.dp))
-            AppGrid(apps, apps.dock.mapNotNull(apps::byKey), size = 58.dp * prefs.iconSize / 100, labelColor = null)
+            Box(Modifier.onGloballyPositioned { dnd.dock = it.boundsInWindow() }) {
+                AppGrid(apps, apps.dock.mapNotNull(apps::byKey), size = 58.dp * prefs.iconSize / 100, labelColor = null, drag = "dock")
+            }
             Spacer(Modifier.height(16.dp))
             Pill("Apps, math, units, time…", Modifier.testTag("homeSearch"), onClick = actions.onSearch) { MicButton(actions.onVoice) }
         }
@@ -408,23 +465,103 @@ internal fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier) {
     }
 }
 
-/** A home page's cell grid: apps and widgets at their cells, sized from the Home screen settings. */
+/** A home page's cell grid: apps and widgets at their cells, sized from the Home screen settings. Also the drop target. */
 @Composable
-internal fun HomeGrid(apps: Apps, widgets: Widgets, page: HomePage, modifier: Modifier) {
-    BoxWithConstraints(modifier) {
+internal fun HomeGrid(apps: Apps, widgets: Widgets, index: Int, page: HomePage, selected: String?, onSelect: (String?) -> Unit, modifier: Modifier) {
+    val dnd = LocalDragDrop.current
+    val haptic = LocalHapticFeedback.current
+    BoxWithConstraints(modifier.onGloballyPositioned { dnd.grids[page.id] = Rect(it.positionInWindow(), it.size.toSize()) }) {
         val cw = maxWidth / prefs.columns
         val ch = maxHeight / prefs.rows
         val icon = minOf(58.dp * prefs.iconSize / 100, cw - 12.dp, ch - if (prefs.labels) 28.dp else 6.dp)
+        val drop = dnd.item?.let { d -> dnd.grids[page.id]?.let { dnd.target(d, dnd.pos, it) }?.let { it to apps.fits(index, it.x, it.y, it.w, it.h, d.key) } }
+        if (drop != null) {
+            val (t, ok) = drop
+            Box(Modifier.offset(cw * t.x, ch * t.y).size(cw * t.w, ch * t.h).padding(4.dp).clip(RoundedCornerShape(20.dp))
+                .background((if (ok) Accent else Danger).copy(alpha = 0.12f)).border(2.dp, if (ok) Accent else Danger, RoundedCornerShape(20.dp)))
+        }
         page.items.forEach { c ->
             key(c.key) {
-                Box(Modifier.offset(cw * c.x, ch * c.y).size(cw * c.w, ch * c.h), contentAlignment = Alignment.Center) {
-                    val id = c.widgetId
-                    if (id != null) WidgetView(widgets, id, cw * c.w - 8.dp, ch * c.h - 8.dp)
-                    else apps.byKey(c.key)?.let { AppTile(apps, it, if (prefs.labels) Fg else null, icon) }
+                val id = c.widgetId
+                if (id == null) Box(Modifier.offset(cw * c.x, ch * c.y).size(cw * c.w, ch * c.h), contentAlignment = Alignment.Center) {
+                    apps.byKey(c.key)?.let { AppTile(apps, it, if (prefs.labels) Fg else null, icon, drag = "grid") }
+                } else {
+                    val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
+                    val now by rememberUpdatedState(c)
+                    val lifted = dnd.item?.key == c.key
+                    Box(
+                        Modifier.offset(cw * c.x, ch * c.y).size(cw * c.w, ch * c.h).onGloballyPositioned { coords[0] = it }
+                            .graphicsLayer { alpha = if (lifted) 0.25f else 1f }
+                            .pointerInput(c.key) {
+                                // Initial pass: see the touch before the widget's own view, take it over after a long press.
+                                tapHoldDrag(
+                                    { coords[0] }, PointerEventPass.Initial, onTap = null,
+                                    onLongPress = { if (!prefs.lockLayout) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onSelect(c.key) } },
+                                    onDragStart = { grab, at ->
+                                        if (prefs.lockLayout) return@tapHoldDrag
+                                        onSelect(null)
+                                        dnd.start(Dragged(now.key, now.w, now.h, "grid", grab, Size(cw.toPx() * now.w, ch.toPx() * now.h)), at)
+                                    },
+                                    onDrag = dnd::move, onDragEnd = { if (dnd.item != null) dnd.end() },
+                                )
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        WidgetView(widgets, id, cw * c.w - 8.dp, ch * c.h - 8.dp)
+                        if (selected == c.key) WidgetFrame(apps, widgets, index, c, cw, ch) { onSelect(null) }
+                    }
                 }
             }
         }
     }
+}
+
+/** Selection frame on a long-pressed widget: edge handles resize it cell by cell, × removes it. */
+@Composable
+private fun BoxScope.WidgetFrame(apps: Apps, widgets: Widgets, page: Int, cell: Cell, cw: Dp, ch: Dp, onClose: () -> Unit) {
+    val id = cell.widgetId ?: return
+    val info = remember(id) { widgets.manager.getAppWidgetInfo(id) } ?: return
+    val density = LocalDensity.current.density
+    fun minCells(px: Int, minPx: Int, cellDp: Dp) = kotlin.math.ceil(((if (minPx > 0) minPx else px) / density) / cellDp.value).toInt().coerceAtLeast(1)
+    val minW = minCells(info.minWidth, info.minResizeWidth, cw)
+    val minH = minCells(info.minHeight, info.minResizeHeight, ch)
+    val current by rememberUpdatedState(cell)
+    fun resize(dx: Int, dy: Int, dw: Int, dh: Int, start: Cell) {
+        val w = start.w + dw; val h = start.h + dh
+        if (w < minW || h < minH) return
+        val next = start.copy(x = start.x + dx, y = start.y + dy, w = w, h = h)
+        if (next != current) apps.place(page, next)
+    }
+    Box(Modifier.matchParentSize().padding(2.dp).border(2.dp, Accent, RoundedCornerShape(24.dp)))
+    val horizontal = info.resizeMode and AppWidgetProviderInfo.RESIZE_HORIZONTAL != 0
+    val vertical = info.resizeMode and AppWidgetProviderInfo.RESIZE_VERTICAL != 0
+    @Composable
+    fun Handle(align: Alignment, name: String, apply: (Float, Float, Cell) -> Unit) {
+        var start by remember { mutableStateOf(cell) }
+        var acc by remember { mutableStateOf(Offset.Zero) }
+        Box(
+            Modifier.align(align).size(36.dp).semantics { contentDescription = name }.pointerInput(Unit) {
+                detectDragGestures(onDragStart = { start = current; acc = Offset.Zero }) { change, d ->
+                    change.consume(); acc += d
+                    apply(acc.x / cw.toPx(), acc.y / ch.toPx(), start)
+                }
+            },
+            contentAlignment = Alignment.Center,
+        ) { Box(Modifier.size(14.dp).clip(CircleShape).background(Accent).border(2.dp, OnAccent, CircleShape)) }
+    }
+    if (horizontal) {
+        Handle(Alignment.CenterEnd, "Resize right") { fx, _, s -> resize(0, 0, fx.roundToInt().coerceAtMost(prefs.columns - s.x - s.w), 0, s) }
+        Handle(Alignment.CenterStart, "Resize left") { fx, _, s -> val d = fx.roundToInt().coerceAtLeast(-s.x); resize(d, 0, -d, 0, s) }
+    }
+    if (vertical) {
+        Handle(Alignment.BottomCenter, "Resize bottom") { _, fy, s -> resize(0, 0, 0, fy.roundToInt().coerceAtMost(prefs.rows - s.y - s.h), s) }
+        Handle(Alignment.TopCenter, "Resize top") { _, fy, s -> val d = fy.roundToInt().coerceAtLeast(-s.y); resize(0, d, 0, -d, s) }
+    }
+    Box(
+        Modifier.align(Alignment.TopEnd).padding(6.dp).size(30.dp).clip(CircleShape).background(PopupBg).border(1.dp, PillLine, CircleShape)
+            .clickable { widgets.remove(id); apps.removeItem(cell.key); onClose() }.semantics { contentDescription = "Remove widget" },
+        contentAlignment = Alignment.Center,
+    ) { Icon(Ic.close, null, tint = Danger, modifier = Modifier.size(14.dp)) }
 }
 
 @Composable
@@ -582,12 +719,12 @@ internal fun rememberLaunchSource(): Pair<Modifier, () -> LaunchSource> {
 }
 
 @Composable
-internal fun AppGrid(apps: Apps, list: List<App>, size: Dp, labelColor: Color? = Fg, columns: Int = 4, rowGap: Dp = 22.dp) {
+internal fun AppGrid(apps: Apps, list: List<App>, size: Dp, labelColor: Color? = Fg, columns: Int = 4, rowGap: Dp = 22.dp, drag: String? = null) {
     if (list.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(rowGap)) {
         list.chunked(columns).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                row.forEach { AppTile(apps, it, labelColor, size, Modifier.weight(1f)) }
+                row.forEach { AppTile(apps, it, labelColor, size, Modifier.weight(1f), drag) }
                 repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
@@ -595,19 +732,36 @@ internal fun AppGrid(apps: Apps, list: List<App>, size: Dp, labelColor: Color? =
 }
 
 @Composable
-internal fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifier: Modifier = Modifier) {
+internal fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifier: Modifier = Modifier, drag: String? = null) {
     var menu by remember { mutableStateOf(false) }
+    var pressed by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val dnd = LocalDragDrop.current
+    val lifted = dnd.item?.let { it.key == app.key && it.from == drag } == true
     val scale by animateFloatAsState(if (pressed) 0.88f else if (menu) 1.1f else 1f, spring(dampingRatio = 0.6f, stiffness = 700f), label = "press")
     val (track, source) = rememberLaunchSource()
+    val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val canDrag = drag != null && !prefs.lockLayout
     Box(modifier) {
         Column(
-            Modifier.fillMaxWidth().combinedClickable(
-                interactionSource = interaction, indication = null,
-                onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menu = true },
-            ) { apps.launch(app, source()) },
+            Modifier.fillMaxWidth().onGloballyPositioned { coords[0] = it }
+                .graphicsLayer { alpha = if (lifted) 0.25f else 1f }
+                .semantics {
+                    onClick { apps.launch(app, source()); true }
+                    onLongClick { menu = true; true }
+                }
+                .pointerInput(app.key, canDrag) {
+                    tapHoldDrag(
+                        { coords[0] }, onPress = { pressed = it }, onTap = { apps.launch(app, source()) },
+                        onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menu = true },
+                        onDragStart = if (!canDrag) null else { _, at ->
+                            menu = false
+                            val px = size.toPx()
+                            dnd.start(Dragged(app.key, 1, 1, drag!!, Offset(px / 2, px / 2), Size(px, px)), at)
+                        },
+                        onDrag = dnd::move, onDragEnd = dnd::end,
+                    )
+                },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             AppIcon(apps, app, size, track.graphicsLayer { scaleX = scale; scaleY = scale }, ring = menu)
@@ -731,14 +885,14 @@ internal fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: 
                 verticalArrangement = Arrangement.spacedBy(10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (frequent.isNotEmpty()) {
                     item(span = { GridItemSpan(4) }) { Label("Suggested", Modifier.padding(start = 6.dp, top = 6.dp)) }
-                    items(frequent, key = { "f" + it.key }) { AppTile(apps, it, Fg, 54.dp) }
+                    items(frequent, key = { "f" + it.key }) { AppTile(apps, it, Fg, 54.dp, drag = "drawer") }
                     item(span = { GridItemSpan(4) }) { Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF22252A))) }
                 }
                 sections.forEach { (letter, group) ->
                     item(span = { GridItemSpan(4) }, key = "h$letter") {
                         Text(letter.toString(), color = Accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
                     }
-                    items(group, key = { it.key }) { AppTile(apps, it, Fg, 54.dp) }
+                    items(group, key = { it.key }) { AppTile(apps, it, Fg, 54.dp, drag = "drawer") }
                 }
             }
             // Full A–Z like the mock-up; a letter with no apps jumps to the next one that has some.
