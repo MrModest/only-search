@@ -1,5 +1,6 @@
 package app.onlysearch
 
+import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.pm.LauncherApps
 import android.graphics.Bitmap
@@ -46,6 +47,13 @@ class ScreenshotTest {
     // Some expressions may legitimately show no calculator card; screenshot whatever is there.
     private fun softWait(condition: () -> Boolean) = runCatching { compose.waitUntil(20_000, condition) }
 
+    // System Home, like the real button: the launcher animates back to its home screen.
+    private fun goHome() {
+        instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+        compose.waitUntil(20_000) { runCatching { compose.onAllNodes(homeIcon("Calendar")).fetchSemanticsNodes().isNotEmpty() }.getOrDefault(false) }
+        compose.waitForIdle()
+    }
+
     private val homeIcon = { label: String -> hasContentDescription(label) and hasAnyAncestor(hasTestTag("home")) }
 
     // Pinned apps, launch counts (for "Frequent") and calculator history, as a regular user would have.
@@ -89,14 +97,14 @@ class ScreenshotTest {
         shot("04-drawer-letter-scrubber")
         runCatching { compose.onNodeWithTag("scrubber").performTouchInput { up() } }
 
-        scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        goHome()
         shot("05-back-home", 1500)
 
         // Long-press popup with shortcuts and quick actions.
         compose.onNode(homeIcon("Calendar")).performTouchInput { longClick() }
         shot("06-long-press-popup", 1200)
-        scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
-        compose.waitForIdle()
+        instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+        goHome()
 
         // Search: empty state (frequent + history), app matches, then the calculator from simple maths
         // up to time-zone conversion. Numbered so the files sort in that order.
