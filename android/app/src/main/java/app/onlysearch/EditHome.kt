@@ -54,7 +54,7 @@ fun EditHome(apps: Apps, widgets: Widgets, onDone: (Int) -> Unit, onPickWidget: 
     val haptic = LocalHapticFeedback.current
     val state = rememberPagerState(apps.currentPage) { apps.pages.size + 1 }
     val config = LocalConfiguration.current
-    val previewW = (config.screenWidthDp * 0.63f).dp
+    val previewW = (config.screenWidthDp * 0.6f).dp
     val previewH = (config.screenHeightDp * 0.6f).dp
     val onPage = state.currentPage < apps.pages.size
     LaunchedEffect(state.currentPage) { if (onPage) apps.currentPage = state.currentPage }
@@ -72,11 +72,17 @@ fun EditHome(apps: Apps, widgets: Widgets, onDone: (Int) -> Unit, onPickWidget: 
         Spacer(Modifier.weight(1f))
         HorizontalPager(
             state, Modifier.fillMaxWidth().height(previewH),
-            contentPadding = PaddingValues(horizontal = (config.screenWidthDp.dp - previewW) / 2), pageSpacing = 14.dp,
+            contentPadding = PaddingValues(horizontal = (config.screenWidthDp.dp - previewW) / 2), pageSpacing = 12.dp,
             key = { apps.pages.getOrNull(it)?.id ?: -1L },
         ) { i ->
             val page = apps.pages.getOrNull(i)
-            if (page == null) AddPageCard { if (!locked()) { apps.addPage(); scope.launch { state.animateScrollToPage(apps.pages.lastIndex) } } }
+            if (page == null) AddPageCard {
+                if (!locked()) {
+                    apps.addPage()
+                    // Wait a frame so the pager knows about the new page before scrolling to it.
+                    scope.launch { withFrameNanos {}; state.animateScrollToPage(apps.pages.lastIndex) }
+                }
+            }
             else {
                 // Long-press, then drag sideways past half a card to swap with the neighbour.
                 val index by rememberUpdatedState(i)
@@ -95,7 +101,7 @@ fun EditHome(apps: Apps, widgets: Widgets, onDone: (Int) -> Unit, onPickWidget: 
                             val to = when { dx > step -> index + 1; dx < -step -> index - 1; else -> return@detectDragGesturesAfterLongPress }
                             if (to !in apps.pages.indices) return@detectDragGesturesAfterLongPress
                             apps.movePage(index, to)
-                            dx += if (to > index) -(size.width + 14.dp.toPx()) else size.width + 14.dp.toPx()
+                            dx += if (to > index) -(size.width + 12.dp.toPx()) else size.width + 12.dp.toPx()
                             scope.launch { state.scrollToPage(to) }
                         }
                     })

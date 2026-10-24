@@ -111,6 +111,8 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.unit.round
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -428,15 +430,19 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
     val dnd = LocalDragDrop.current
     LaunchedEffect(prefs.columns, prefs.rows) { apps.fitGrid() }
     LaunchedEffect(pager.currentPage) { selected = null }
-    Column(
+    var menuAt by remember { mutableStateOf(IntOffset.Zero) }
+    Box(
         Modifier.fillMaxSize()
             .pointerInput(Unit) { detectPinchIn(actions.onEdit) }
             .draggable(rememberDraggableState(actions.onDrag), Orientation.Vertical, onDragStopped = { actions.onDragEnd(it) })
-            .combinedClickable(interactionSource = null, indication = null, onLongClick = {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress); menu = true
-            }) { selected = null }
-            .systemBarsPadding().padding(top = 24.dp, bottom = 12.dp).testTag("home")
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { selected = null }, onLongPress = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress); menuAt = it.round(); menu = true
+                })
+            }
+            .testTag("home")
     ) {
+    Column(Modifier.fillMaxSize().systemBarsPadding().padding(top = 24.dp, bottom = 12.dp)) {
         HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), key = { apps.pages.getOrNull(it)?.id ?: -1L }) { i ->
             val page = apps.pages.getOrNull(i) ?: return@HorizontalPager
             Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
@@ -446,13 +452,16 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
             }
         }
         Column(Modifier.padding(horizontal = 18.dp)) {
-            PageDots(apps.pages.size, pager.currentPage, Modifier.padding(vertical = 14.dp))
+            PageDots(apps.pages.size, pager.currentPage, Modifier.padding(top = 18.dp, bottom = 16.dp))
             Box(Modifier.onGloballyPositioned { dnd.dock = it.boundsInWindow() }) {
                 AppGrid(apps, apps.dock.mapNotNull(apps::byKey), size = 58.dp * prefs.iconSize / 100, labelColor = null, drag = "dock")
             }
             Spacer(Modifier.height(16.dp))
             Pill("Apps, math, units, time…", Modifier.testTag("homeSearch"), onClick = actions.onSearch) { MicButton(actions.onVoice) }
         }
+    }
+    // Menus open where the finger was.
+    Box(Modifier.offset { menuAt }) {
         val pageWidgets = apps.pages.getOrNull(pager.currentPage)?.items.orEmpty().mapNotNull { it.widgetId }
         DropdownMenu(menu, { menu = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
             DropdownMenuItem({ Text("Edit home") }, { menu = false; actions.onEdit() })
@@ -468,6 +477,7 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
             }
         }
     }
+}
 }
 
 internal fun pickWallpaper(context: android.content.Context) =
@@ -505,7 +515,8 @@ internal fun HomeGrid(apps: Apps, widgets: Widgets, index: Int, page: HomePage, 
     BoxWithConstraints(modifier.onGloballyPositioned { dnd.grids[page.id] = Rect(it.positionInWindow(), it.size.toSize()) }) {
         val cw = maxWidth / prefs.columns
         val ch = maxHeight / prefs.rows
-        val icon = minOf(58.dp * prefs.iconSize / 100, cw - 12.dp, ch - if (prefs.labels) 28.dp else 6.dp)
+        // Keep ~10dp between a label and the icon below it; small cells shrink the icon.
+        val icon = minOf(58.dp * prefs.iconSize / 100, cw - 12.dp, ch - if (prefs.labels) 34.dp else 10.dp)
         val drop = dnd.item?.let { d -> dnd.grids[page.id]?.let { dnd.target(d, dnd.pos, it) }?.let { it to apps.fits(index, it.x, it.y, it.w, it.h, d.key) } }
         if (drop != null) {
             val (t, ok) = drop

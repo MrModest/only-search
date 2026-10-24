@@ -25,8 +25,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import android.text.format.DateFormat
 import java.util.Date
 import kotlin.math.roundToInt
@@ -99,9 +100,11 @@ internal class Page(
 fun SettingsScreen(apps: Apps, start: String, onClose: () -> Unit) {
     var page by remember { mutableStateOf(start) }
     val pages = remember { settingsPages(apps) }
-    BackHandler { if (page == "hub") onClose() else page = "hub" }
+    // Opened straight on a page (e.g. Layout in edit mode): Back goes back to where it came from, not to the hub.
+    val back = { if (page == "hub" || page == start) onClose() else page = "hub" }
+    BackHandler(onBack = back)
     val current = pages.firstOrNull { it.id == page }
-    if (current?.content != null) SettingsPage(current.title, onBack = { page = "hub" }) { current.content.invoke() }
+    if (current?.content != null) SettingsPage(current.title, onBack = back) { current.content.invoke() }
     else Hub(apps, pages, onClose) { page = it }
 }
 
@@ -264,11 +267,7 @@ private fun HomeSettings() {
                     Text("Icon size", fontSize = 15.sp, modifier = Modifier.weight(1f))
                     Text("${prefs.iconSize}%", color = Accent, fontSize = 13.sp, fontFamily = Mono)
                 }
-                Slider(
-                    prefs.iconSize.toFloat(), { prefs.iconSize = (it / 5).roundToInt() * 5 }, valueRange = 70f..130f, steps = 11,
-                    colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent, inactiveTrackColor = Color(0xFF3A3D45),
-                        activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent),
-                )
+                ThinSlider(prefs.iconSize, 70..130, 5) { prefs.iconSize = it }
             }
         },
         {
@@ -310,7 +309,7 @@ private fun HomePreview() {
         Spacer(Modifier.weight(1f))
         val cell = 26.dp * prefs.iconSize / 100 * 4 / maxOf(4, prefs.columns)
         Column(verticalArrangement = Arrangement.spacedBy(if (prefs.labels) 8.dp else 5.dp)) {
-            repeat(minOf(prefs.rows, 4)) {
+            repeat(minOf(prefs.rows, 3)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     repeat(prefs.columns) {
                         Box(Modifier.size(cell).clip(iconShape(prefs.iconShape, cell)).background(Color(0xFF23262C))
@@ -340,4 +339,24 @@ private fun StepButton(text: String, label: String, enabled: Boolean, onClick: (
             .clickable(enabled = enabled, onClick = onClick).semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) { Text(text, fontSize = 18.sp, color = if (enabled) Fg else Dim) }
+}
+
+/** Thin track with a round thumb, like the mock-up's range input. Tap or drag; snaps to [step]. */
+@Composable
+private fun ThinSlider(value: Int, range: IntRange, step: Int, onChange: (Int) -> Unit) {
+    val frac = (value - range.first).toFloat() / (range.last - range.first)
+    fun pick(x: Float, width: Int) {
+        val v = range.first + ((x / width).coerceIn(0f, 1f) * (range.last - range.first) / step).roundToInt() * step
+        if (v != value) onChange(v)
+    }
+    BoxWithConstraints(
+        Modifier.fillMaxWidth().height(32.dp)
+            .pointerInput(range) { detectTapGestures { pick(it.x, size.width) } }
+            .pointerInput(range) { detectHorizontalDragGestures { c, _ -> pick(c.position.x, size.width) } },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(Color(0xFF3A3D45)))
+        Box(Modifier.fillMaxWidth(frac).height(4.dp).clip(CircleShape).background(Accent))
+        Box(Modifier.offset(x = (maxWidth - 20.dp) * frac).size(20.dp).clip(CircleShape).background(Accent).border(3.dp, SettingsBg, CircleShape))
+    }
 }
