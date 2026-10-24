@@ -16,6 +16,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -79,12 +80,14 @@ class ScreenshotTest {
             down(Offset(centerX, height * 0.75f)); moveTo(Offset(centerX, height * 0.62f)); moveTo(Offset(centerX, height * 0.5f))
         }
         shot("02-drawer-dragging")
-        compose.onNodeWithTag("home").performTouchInput { moveTo(Offset(centerX, height * 0.25f)); up() }
+        // A gesture can't always be continued across performTouchInput calls; finish with a clean swipe if needed.
+        runCatching { compose.onNodeWithTag("home").performTouchInput { moveTo(Offset(centerX, height * 0.25f)); up() } }
+            .onFailure { compose.onNodeWithTag("home").performTouchInput { swipeUp(startY = height * 0.8f, endY = height * 0.2f, durationMillis = 400) } }
         shot("03-drawer", 1500)
 
         compose.onNodeWithTag("scrubber").performTouchInput { down(Offset(centerX, height * 0.5f)); moveTo(Offset(centerX, height * 0.55f)) }
         shot("04-drawer-letter-scrubber")
-        compose.onNodeWithTag("scrubber").performTouchInput { up() }
+        runCatching { compose.onNodeWithTag("scrubber").performTouchInput { up() } }
 
         scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         shot("05-back-home", 1500)
