@@ -44,5 +44,4 @@ CI emulator gesture tests are unreliable: the runner is CPU-starved, `input swip
 - Live currency + crypto rate provider (see above).
 - Alternative-units table from the mock-up (needs a second conversion per target unit).
 - Licensing with Soulver before any public distribution.
-- Fonts: system font instead of Figtree/IBM Plex Mono.
 - Weather in the home header: no data source; date only.

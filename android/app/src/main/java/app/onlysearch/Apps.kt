@@ -51,6 +51,7 @@ class Apps(private val context: Context) {
     val history = mutableStateListOf<Pair<String, String>>().apply {
         addAll(prefs.list("history").mapNotNull { it.split('\t').takeIf { p -> p.size == 2 }?.let { p -> p[0] to p[1] } })
     }
+    val recent = mutableStateListOf<String>().apply { addAll(prefs.list("recent")) }
     private val counts = mutableStateMapOf<String, Int>()
     val loaded = mutableStateOf(false)
 
@@ -80,7 +81,9 @@ class Apps(private val context: Context) {
 
     fun launch(app: App, from: LaunchSource? = null) {
         counts[app.key] = (counts[app.key] ?: 0) + 1
-        prefs.edit { putInt("count:${app.key}", counts[app.key]!!) }
+        recent.remove(app.key); recent.add(0, app.key)
+        while (recent.size > 5) recent.removeAt(recent.lastIndex)
+        prefs.edit { putInt("count:${app.key}", counts[app.key]!!); putString("recent", recent.joinToString("\n")) }
         returningFromApp = true
         launcher.startMainActivity(app.component, app.user, from?.bounds, from?.options())
     }
@@ -98,6 +101,8 @@ class Apps(private val context: Context) {
         while (history.size > 20) history.removeAt(history.lastIndex)
         prefs.edit { putString("history", history.joinToString("\n") { "${it.first}\t${it.second}" }) }
     }
+
+    fun clearHistory() { history.clear(); prefs.edit { remove("history") } }
 
     fun shortcuts(app: App): List<Shortcut> {
         if (!launcher.hasShortcutHostPermission()) return emptyList()

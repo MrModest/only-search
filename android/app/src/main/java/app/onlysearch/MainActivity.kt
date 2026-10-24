@@ -4,7 +4,9 @@ import android.content.Intent
 import android.content.pm.LauncherApps
 import android.os.Bundle
 import android.os.UserHandle
+import android.graphics.Color
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
@@ -32,7 +34,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Light status/nav icons always: every screen is dark, whatever the system theme.
+        enableEdgeToEdge(SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT))
         apps = Apps(this)
         widgets = Widgets(this)
         lifecycleScope.launch { apps.load() }

@@ -1,5 +1,9 @@
 # UI design decision
 
+**Update (2026-10-24): superseded by [`Mock-up 2026-10-24.html`](Mock-up%202026-10-24.html)** (14 screens; open in a browser). The app now follows it for Home, Search (empty / results / calc), App drawer, App context menu and Widget picker. Style: soft dark tiles and cards (icon corner = ⅓ of the side, cards 18–24 dp, pill search bars), sky-blue accent `#7CC4FA`, Inter for UI and JetBrains Mono for labels (bundled in `res/font`). Home search bar now sits **below** the dock. Not built yet: People/Settings search sections, drawer groups, home pages + edit mode, the Settings screens, weather/agenda line.
+
+The rest of this file is the earlier (2026-10-18) direction, kept for history.
+
 **Decision (2026-10-18): direction D "Merged" won.** Mock-up: [`prototype/mockups.html`](../prototype/mockups.html), which opens on D by default (`#d`). A, B and C are kept in the same file as rejected references. Published copy: https://claude.ai/artifact/S5WgbqSAMfz3R2NKnzpenx (private).
 
 The prototype is throwaway HTML. Rebuild the screens properly in Compose; don't port the markup.
