@@ -13,6 +13,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -195,8 +196,8 @@ class ScreenshotTest {
             .forEachIndexed { i, title ->
                 compose.onNodeWithText(title).performScrollTo().performClick()
                 shot("%02d-settings-%s".format(51 + i, title.lowercase().replace(Regex("[^a-z]+"), "-").trim('-')))
-                instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
-                compose.waitForIdle()
+                compose.onAllNodes(hasContentDescription("Back")).onFirst().performClick()
+                compose.waitUntil(10_000) { compose.onAllNodesWithText("Search settings").fetchSemanticsNodes().isNotEmpty() }
             }
         scenario.close()
     }
