@@ -72,6 +72,7 @@ jobs:
         with:
           name: only-search-apk
           path: android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          retention-days: 3 # releases keep their own copy; Actions storage is small
 
       - uses: actions/upload-artifact@v4
         with:
@@ -79,6 +80,7 @@ jobs:
           path: |
             android/app/build/outputs/apk/release/app-x86_64-release.apk
             android/app/build/outputs/apk/androidTest/release/*.apk
+          retention-days: 3
 
   emulator:
     needs: apk
@@ -131,4 +133,4 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: "emulator-results-${{ matrix.api }}", path: out }
+        with: { name: "emulator-results-${{ matrix.api }}", path: out, retention-days: 3 }

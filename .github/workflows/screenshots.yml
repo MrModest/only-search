@@ -62,4 +62,4 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: screenshots, path: out }
+        with: { name: screenshots, path: out, retention-days: 3 }
