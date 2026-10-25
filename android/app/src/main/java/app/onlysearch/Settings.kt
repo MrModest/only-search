@@ -38,6 +38,8 @@ import java.util.Date
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -640,13 +642,23 @@ private fun LookSettings(apps: Apps) {
         })
         if (packs.isEmpty()) Text("No icon packs installed. Packs made for Nova or ADW work, e.g. ones exported by Icon Pack Studio.",
             color = Dim, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp).offset(y = (-10).dp))
+        var picking by remember { mutableStateOf(false) }
+        if (picking) AccentPicker { picking = false }
         Group("Accent", listOf {
             Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                val custom = prefs.accent.startsWith("#")
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { picking = true }.padding(4.dp).semantics { contentDescription = "custom" }) {
+                    Box(Modifier.size(40.dp).clip(CircleShape)
+                        .background(androidx.compose.ui.graphics.Brush.sweepGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)))
+                        .border(if (custom) 3.dp else 0.dp, if (custom) Fg else Color.Transparent, CircleShape))
+                    Text("Custom", color = if (custom) Fg else Muted, fontSize = 12.sp)
+                }
                 Accents.forEach { (name, color) ->
                     val on = prefs.accent == name
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { prefs.accent = name }.padding(4.dp).semantics { contentDescription = name }) {
-                        Box(Modifier.size(40.dp).clip(CircleShape).background(color).border(if (on) 3.dp else 0.dp, if (on) Fg else Color.Transparent, CircleShape))
+                        Box(Modifier.size(40.dp).clip(CircleShape).background(color).border(if (on) 3.dp else 0.dp, if (!on) Color.Transparent else if (name == "white") Accent.copy(alpha = 0.5f).compositeOver(Color.Black) else Fg, CircleShape))
                         Text(name.replaceFirstChar { it.uppercase() }, color = if (on) Fg else Muted, fontSize = 12.sp)
                     }
                 }
@@ -671,6 +683,39 @@ private fun LookSettings(apps: Apps) {
                 }
             },
         ))
+    }
+}
+
+/** Hue, saturation and brightness sliders for a custom accent; it applies as you drag. */
+@Composable
+private fun AccentPicker(onClose: () -> Unit) {
+    val start = remember { FloatArray(3).also { android.graphics.Color.colorToHSV(Accent.toArgb(), it) } }
+    var hue by remember { mutableStateOf(start[0].roundToInt()) }
+    var sat by remember { mutableStateOf((start[1] * 100).roundToInt()) }
+    var bri by remember { mutableStateOf((start[2] * 100).roundToInt()) }
+    val initial = remember { Triple(hue, sat, bri) }
+    LaunchedEffect(hue, sat, bri) {
+        if (Triple(hue, sat, bri) == initial) return@LaunchedEffect // just opening it keeps a named accent
+        val argb = android.graphics.Color.HSVToColor(floatArrayOf(hue.toFloat(), sat / 100f, bri / 100f))
+        prefs.accent = String.format("#%06X", argb and 0xFFFFFF)
+    }
+    androidx.compose.ui.window.Dialog(onClose) {
+        Column(Modifier.clip(RoundedCornerShape(22.dp)).background(PopupBg).border(1.dp, PillLine, RoundedCornerShape(22.dp)).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.size(36.dp).clip(CircleShape).background(Accent))
+                Text("Custom accent", color = Fg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(String.format("#%06X", Accent.toArgb() and 0xFFFFFF), color = Muted, fontSize = 13.sp, fontFamily = Mono)
+            }
+            listOf(Triple("Hue", hue, 0..360), Triple("Saturation", sat, 0..100), Triple("Brightness", bri, 0..100)).forEach { (label, v, range) ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(label, color = Muted, fontSize = 12.sp)
+                    ThinSlider(v, range, 1) { when (label) { "Hue" -> hue = it; "Saturation" -> sat = it; else -> bri = it } }
+                }
+            }
+            Text("Done", color = Accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.align(Alignment.End).clip(CircleShape).clickable(onClick = onClose).padding(10.dp))
+        }
     }
 }
 
