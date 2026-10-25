@@ -1684,7 +1684,8 @@ internal fun Pill(hint: String, modifier: Modifier = Modifier, height: Dp = 56.d
 }
 
 @Composable
-internal fun Field(value: String, onValue: (String) -> Unit, hint: String, modifier: Modifier, autoFocus: Boolean, fontSize: Int = 16, onGo: () -> Unit) {
+internal fun Field(value: String, onValue: (String) -> Unit, hint: String, modifier: Modifier, autoFocus: Boolean, fontSize: Int = 16,
+    align: TextAlign = TextAlign.Start, onGo: () -> Unit) {
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     if (autoFocus) LaunchedEffect(Unit) { focus.requestFocus(); keyboard?.show() }
@@ -1693,11 +1694,11 @@ internal fun Field(value: String, onValue: (String) -> Unit, hint: String, modif
     if (field.text != value) field = TextFieldValue(value, TextRange(value.length))
     BasicTextField(
         field, { field = it; if (it.text != value) onValue(it.text) }, modifier.focusRequester(focus),
-        textStyle = TextStyle(color = Fg, fontSize = fontSize.sp, fontFamily = Inter),
+        textStyle = TextStyle(color = Fg, fontSize = fontSize.sp, fontFamily = Inter, textAlign = align),
         singleLine = true,
         cursorBrush = SolidColor(Accent),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go, autoCorrectEnabled = false),
         keyboardActions = KeyboardActions(onGo = { onGo() }),
-        decorationBox = { inner -> Box { if (value.isEmpty()) Text(hint, color = Muted, fontSize = fontSize.sp, maxLines = 1); inner() } },
+        decorationBox = { inner -> Box(contentAlignment = if (align == TextAlign.Center) Alignment.Center else Alignment.CenterStart) { if (value.isEmpty()) Text(hint, color = Muted, fontSize = fontSize.sp, maxLines = 1); inner() } },
     )
 }

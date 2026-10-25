@@ -24,11 +24,18 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 
 /** A home folder: up to four of its apps in a tile. Tap opens it; hold and drag moves it. */
@@ -66,13 +73,23 @@ internal fun FolderTile(apps: Apps, key: String, labelColor: Color?, size: Dp) {
         }
         if (labelColor != null) Text(folder.name, color = labelColor, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             style = shadowed(), modifier = Modifier.padding(top = 7.dp, start = 2.dp, end = 2.dp))
+        // Inside the tile's column so the sheet is placed over the tile.
+        if (open) FolderSheet(apps, key, size, with(LocalDensity.current) { (coords[0]?.size?.width ?: 0).toDp() }) { open = false }
     }
-    if (open) FolderSheet(apps, key) { open = false }
 }
 
-/** An open folder over dimmed home: its name (editable) and apps. Dragging an app out takes it out of the folder. */
+/** Centred on the folder's tile, like Nova, but kept on screen. */
+private object OverAnchor : PopupPositionProvider {
+    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+        val margin = (windowSize.width * 0.02f).toInt()
+        fun place(center: Int, size: Int, window: Int) = (center - size / 2).coerceAtMost(window - margin - size).coerceAtLeast(margin)
+        return IntOffset(place(anchorBounds.center.x, popupContentSize.width, windowSize.width), place(anchorBounds.center.y, popupContentSize.height, windowSize.height))
+    }
+}
+
+/** An open folder over its tile: its apps, then its name (editable). Dragging an app out takes it out of the folder. */
 @Composable
-private fun FolderSheet(apps: Apps, key: String, onClose: () -> Unit) {
+private fun FolderSheet(apps: Apps, key: String, icon: Dp, cell: Dp, onClose: () -> Unit) {
     val folder = apps.folders[key] ?: return onClose()
     val dnd = LocalDragDrop.current
     val from = "folder:$key"
@@ -90,18 +107,18 @@ private fun FolderSheet(apps: Apps, key: String, onClose: () -> Unit) {
         onDispose { lifecycle.removeObserver(observer) }
     }
     BackHandler { save(); onClose() }
-    Popup(popupPositionProvider = FullScreen, onDismissRequest = { save(); onClose() }, properties = PopupProperties(focusable = true, clippingEnabled = false)) {
+    Popup(popupPositionProvider = OverAnchor, onDismissRequest = { save(); onClose() }, properties = PopupProperties(focusable = true)) {
         ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
-            Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (dragging) 0f else 1f }.background(Color(0x99000000))
-                .clickable(interactionSource = null, indication = null) { save(); onClose() }) {
-                Column(
-                    Modifier.align(Alignment.Center).padding(horizontal = 24.dp).fillMaxWidth().clip(RoundedCornerShape(WidgetCorner * 3)).background(PopupBg)
-                        .border(1.dp, PillLine, RoundedCornerShape(WidgetCorner * 3)).clickable(interactionSource = null, indication = null) {}.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Field(name, { name = it }, "Folder name", Modifier.fillMaxWidth(), autoFocus = false, fontSize = 18) { save() }
-                    AppGrid(apps, folder.apps.mapNotNull(apps::byKey), 52.dp, Fg, columns = 4, rowGap = 16.dp, drag = from)
-                }
+            val list = folder.apps.mapNotNull(apps::byKey)
+            val columns = when { list.size <= 3 -> list.size.coerceAtLeast(1); list.size <= 9 -> 3; else -> 4 }
+            Column(
+                Modifier.graphicsLayer { alpha = if (dragging) 0f else 1f }.width(cell.coerceAtLeast(icon + 28.dp) * columns + 24.dp)
+                    .clip(RoundedCornerShape(WidgetCorner * 3)).background(PopupBg).border(1.dp, PillLine, RoundedCornerShape(WidgetCorner * 3))
+                    .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                AppGrid(apps, list, icon, Fg, columns = columns, rowGap = 16.dp, drag = from)
+                Field(name, { name = it }, "Folder name", Modifier.fillMaxWidth(), autoFocus = false, fontSize = 17, align = TextAlign.Center) { save() }
             }
         }
     }
