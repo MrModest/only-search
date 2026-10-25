@@ -14,6 +14,7 @@ import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
 import java.io.File
 import java.util.zip.ZipInputStream
+import kotlin.math.roundToInt
 
 /**
  * Imports a Nova Launcher backup (.novabackup: a zip of nova.db and nova.xml) into the launcher prefs:
@@ -155,7 +156,8 @@ private fun importNova(context: Context, db: SQLiteDatabase, novaPrefs: Map<Stri
     novaPrefs["adaptive_icon_shape"]?.let { prefs.iconShape = when (it) { "CIRCLE" -> "circle"; "SQUARE", "ROUNDED_SQUARE" -> "square"; "TEARDROP" -> "teardrop"; else -> "squircle" } }
     // "1.25:true:13.0:…" = icon scale : show labels : …
     novaPrefs["desktop_cellspecs"]?.split(":")?.let { s ->
-        s.getOrNull(0)?.toFloatOrNull()?.let { prefs.iconSize = (it * 100).toInt().coerceIn(70, 130) / 5 * 5 }
+        // Nova's 100% icon is ~42 dp, ours 58 dp: 125% in Nova ≈ 90% here.
+        s.getOrNull(0)?.toFloatOrNull()?.let { prefs.iconSize = (it * 42 / 58 * 100 / 5).roundToInt().times(5).coerceIn(70, 130) }
         s.getOrNull(1)?.let { prefs.labels = it == "true" }
     }
     novaPrefs["drawer_grid"]?.let { Regex("\\d+x(\\d+)").find(it)?.groupValues?.get(1)?.toIntOrNull() }?.let { prefs.drawerColumns = it.coerceIn(3, 6) }
