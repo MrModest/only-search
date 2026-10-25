@@ -39,28 +39,33 @@ import java.util.Date
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-data class Event(val title: String, val begin: Long, val end: Long, val allDay: Boolean, val calendar: Long)
+data class Event(val title: String, val begin: Long, val end: Long, val allDay: Boolean, val calendar: Long, val color: Int)
 
 data class CalendarInfo(val id: Long, val name: String, val account: String, val color: Int)
 
 fun hasCalendar(context: Context) = context.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
-/** Today's events that haven't ended yet, earliest first. Blocking. */
-fun todaysEvents(context: Context): List<Event> {
+/** Event instances overlapping [from, to), earliest first; empty without permission. Blocking. */
+fun events(context: Context, from: Long, to: Long): List<Event> {
     if (!hasCalendar(context)) return emptyList()
-    val now = System.currentTimeMillis()
-    val end = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59) }.timeInMillis
-    val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also { ContentUris.appendId(it, now - 86_400_000L); ContentUris.appendId(it, end) }.build()
+    val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also { ContentUris.appendId(it, from); ContentUris.appendId(it, to) }.build()
     val cols = arrayOf(CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN, CalendarContract.Instances.END, CalendarContract.Instances.ALL_DAY,
-        CalendarContract.Instances.CALENDAR_ID)
+        CalendarContract.Instances.CALENDAR_ID, CalendarContract.Instances.DISPLAY_COLOR)
     val events = mutableListOf<Event>()
     runCatching {
         context.contentResolver.query(uri, cols, null, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
-            while (c.moveToNext()) events += Event(c.getString(0).orEmpty().ifBlank { "(no title)" }, c.getLong(1), c.getLong(2), c.getInt(3) == 1, c.getLong(4))
+            while (c.moveToNext()) events += Event(c.getString(0).orEmpty().ifBlank { "(no title)" }, c.getLong(1), c.getLong(2), c.getInt(3) == 1, c.getLong(4), c.getInt(5))
         }
     }
+    return events
+}
+
+/** Today's events that haven't ended yet, earliest first. Blocking. */
+fun todaysEvents(context: Context): List<Event> {
+    val now = System.currentTimeMillis()
+    val end = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59) }.timeInMillis
     // All-day instances are stamped in UTC; keep the ones covering today, and timed ones still to come today.
-    return events.filter { if (it.allDay) it.end > now - 86_400_000L / 2 else it.end > now && it.begin <= end }
+    return events(context, now - 86_400_000L, end).filter { if (it.allDay) it.end > now - 86_400_000L / 2 else it.end > now && it.begin <= end }
 }
 
 fun calendars(context: Context): List<CalendarInfo> {
@@ -140,6 +145,7 @@ internal val Builtins = listOf(
     Builtin("clock", "Clock", 2, 1) { prefs.columns to 2 },
     Builtin("event", "Next event", 2, 1) { prefs.columns to 1 },
     Builtin("today", "Today", 2, 2) { prefs.columns to 2 },
+    Builtin("day", "Day", 2, 3) { prefs.columns to prefs.rows },
 )
 
 /** A built-in widget's content. Agenda widgets ask for calendar access in place and show only the calendars picked for them. */
@@ -158,8 +164,85 @@ internal fun BuiltinWidget(cell: Cell, modifier: Modifier = Modifier, preview: B
         Text("Tap to allow calendar access", color = Accent, fontSize = 13.sp, maxLines = 1)
     }
     val hidden = prefs.hiddenCalendars(cell.key)
-    val events = rememberEvents().filter { it.calendar !in hidden }
-    if (kind.kind == "event") NextEventLine(events) else TodayCard(events, modifier)
+    when (kind.kind) {
+        "event" -> NextEventLine(rememberEvents().filter { it.calendar !in hidden })
+        "today" -> TodayCard(rememberEvents().filter { it.calendar !in hidden }, modifier)
+        else -> DayCard(hidden, prefs.dayRange(cell.key), modifier)
+    }
+}
+
+private const val HourMs = 3_600_000L
+
+/**
+ * Timed events from [range].first hours before the current hour to [range].second hours after it, each hour the same
+ * height, so events are as tall as they last (15:30–17:30 fills half of 15:00, all of 16:00, half of 17:00).
+ * Overlapping events share the width.
+ */
+@Composable
+private fun DayCard(hidden: Set<Long>, range: Pair<Int, Int>, modifier: Modifier) {
+    val hours = range.first + range.second
+    val context = LocalContext.current
+    val (start, now, all) = produceState(Triple(0L, 0L, emptyList<Event>()), calendarGrants, range) {
+        while (true) {
+            val now = System.currentTimeMillis()
+            val start = now - now % HourMs - range.first * HourMs
+            value = Triple(start, now, withContext(Dispatchers.IO) { events(context, start, start + hours * HourMs) })
+            kotlinx.coroutines.delay(60_000 - System.currentTimeMillis() % 60_000)
+        }
+    }.value
+    val timed = all.filter { !it.allDay && it.calendar !in hidden && it.end > start }
+    val shape = RoundedCornerShape(WidgetCorner)
+    Column(modifier.fillMaxSize().clip(shape).background(Card.copy(alpha = 0.82f)).border(1.dp, CardLine, shape).clickable { openCalendar(context) }
+        .padding(horizontal = 10.dp, vertical = 10.dp)) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val hour = maxHeight / hours
+            val labelW = if (DateFormat.is24HourFormat(context)) 40.dp else 48.dp
+            val step = listOf(1, 2, 3, 4, 6).firstOrNull { hour * it >= 14.dp } ?: 12
+            // Quarter and half hour lines once there's room for them.
+            val ticks = if (hour >= 96.dp) 4 else if (hour >= 48.dp) 2 else 1
+            for (q in 1 until hours * ticks) if (q % ticks != 0)
+                Box(Modifier.offset(x = labelW, y = hour * q / ticks).fillMaxWidth().height(1.dp).background(CardLine.copy(alpha = 0.45f)))
+            for (i in 0..hours) {
+                Box(Modifier.offset(x = labelW, y = hour * i).fillMaxWidth().height(1.dp).background(CardLine))
+                if (i % step == 0 && i < hours) Text(
+                    DateFormat.format(if (DateFormat.is24HourFormat(context)) "HH:00" else "h a", Date(start + i * HourMs)).toString(),
+                    color = Dim, fontSize = 10.sp, fontFamily = Mono, maxLines = 1, modifier = Modifier.offset(y = hour * i - 6.dp),
+                )
+            }
+            // Overlapping runs of events split the width into lanes, each event taking the first lane free when it starts.
+            val lane = IntArray(timed.size); val lanes = IntArray(timed.size)
+            var i = 0
+            while (i < timed.size) {
+                val ends = mutableListOf<Long>(); var runEnd = timed[i].end; var j = i
+                while (j < timed.size && timed[j].begin < runEnd) {
+                    val e = timed[j]
+                    val free = ends.indexOfFirst { it <= e.begin }
+                    lane[j] = if (free >= 0) free.also { ends[it] = e.end } else ends.size.also { ends += e.end }
+                    runEnd = maxOf(runEnd, e.end); j++
+                }
+                for (k in i until j) lanes[k] = ends.size
+                i = j
+            }
+            val width = maxWidth - labelW - 4.dp
+            timed.forEachIndexed { k, e ->
+                val top = hour * ((e.begin - start).coerceAtLeast(0) / HourMs.toFloat())
+                val bottom = hour * ((e.end - start).coerceAtMost(hours * HourMs) / HourMs.toFloat())
+                val w = width / lanes[k]
+                Column(
+                    Modifier.offset(x = labelW + 4.dp + w * lane[k], y = top).size(w - 2.dp, (bottom - top - 1.dp).coerceAtLeast(3.dp))
+                        .clip(RoundedCornerShape(3.dp)).background(Color(e.color).copy(alpha = if (e.end < now) 0.2f else 0.4f))
+                        .border(width = 1.dp, color = Color(e.color).copy(alpha = 0.6f), shape = RoundedCornerShape(3.dp))
+                        .clickable { openCalendar(context, e.begin) }.padding(horizontal = 4.dp),
+                ) {
+                    Text(e.title, fontSize = 11.sp, lineHeight = 13.sp, color = if (e.end < now) Muted else Fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (bottom - top >= 28.dp) Text("${hm(context, e.begin)} – ${hm(context, e.end)}", fontSize = 10.sp, lineHeight = 12.sp, color = Muted, maxLines = 1)
+                }
+            }
+            val y = hour * ((now - start) / HourMs.toFloat())
+            Box(Modifier.offset(x = labelW - 3.dp, y = y - 3.dp).size(6.dp).clip(CircleShape).background(Accent))
+            Box(Modifier.offset(x = labelW, y = y - 1.dp).fillMaxWidth().height(2.dp).background(Accent))
+        }
+    }
 }
 
 /** Which calendars an agenda widget shows. Unticked ones are remembered, so new calendars show up by default. */
@@ -170,6 +253,14 @@ internal fun CalendarPicker(key: String, onClose: () -> Unit) {
     Dialog(onClose) {
         ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
             Column(Modifier.clip(RoundedCornerShape(22.dp)).background(PopupBg).border(1.dp, PillLine, RoundedCornerShape(22.dp)).padding(vertical = 18.dp)) {
+                if (key.startsWith("b:day:")) {
+                    Text("Time range", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 20.dp))
+                    val (back, ahead) = prefs.dayRange(key)
+                    Column(Modifier.padding(horizontal = 6.dp, vertical = 6.dp)) {
+                        Stepper("Hours before now", back, 0..12) { prefs.setDayRange(key, it to ahead) }
+                        Stepper("Hours after now", ahead, 1..24) { prefs.setDayRange(key, back to it) }
+                    }
+                }
                 Text("Calendars", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 20.dp))
                 if (all.isEmpty()) Text("No calendars on this phone, or no calendar access.", color = Muted, fontSize = 14.sp, modifier = Modifier.padding(20.dp))
                 Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()).padding(top = 8.dp)) {

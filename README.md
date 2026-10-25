@@ -24,7 +24,7 @@ An Android launcher built around one search bar. Type to find apps, shortcuts, c
 - **App menu** on long-press: shortcuts (drag one out to pin it), Info, Widgets, Rename, Hide, Uninstall.
 - **App drawer** with frequent apps, custom groups and an A–Z scrubber.
 - **Gestures**: swipe up/down, two-finger swipe, double-tap, pinch, Home press, each mapped to an action. Lock screen through an optional accessibility service.
-- **Agenda**: next calendar event under the clock and a Today card (opt-in).
+- **Agenda widgets**: next event, a Today list, and a full-page Day timeline (events drawn to scale over an adjustable range, 4 hours back and 20 ahead by default). Each picks its own calendars.
 - **Settings** for grid size, icon shape and size, dock and search bar position, accent colour, themed icons, search sources and calculator options. Backup and restore to a JSON file.
 
 Contacts and calendar permissions are optional and asked only when a feature needs them. Internet is used only for currency rates.

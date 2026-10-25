@@ -133,6 +133,16 @@ class Prefs(context: Context) {
     fun hiddenCalendars(key: String) = hiddenCals[key].orEmpty()
     fun setHiddenCalendars(key: String, ids: Set<Long>) { hiddenCals[key] = ids; sp.edit { putString("cals:$key", ids.joinToString(",")) } }
 
+    // Hours a Day widget shows before and after the current hour, by widget key
+    private val dayRanges = mutableStateMapOf<String, Pair<Int, Int>>().apply {
+        sp.all.forEach { (k, v) ->
+            val (b, a) = (v as? String)?.split(",")?.mapNotNull { it.toIntOrNull() }?.takeIf { k.startsWith("range:") && it.size == 2 } ?: return@forEach
+            put(k.removePrefix("range:"), b to a)
+        }
+    }
+    fun dayRange(key: String) = dayRanges[key] ?: (4 to 20)
+    fun setDayRange(key: String, r: Pair<Int, Int>) { dayRanges[key] = r; sp.edit { putString("range:$key", "${r.first},${r.second}") } }
+
     // App drawer
     var drawerColumns by P("set.drawerColumns", 4)
     var suggested by P("set.suggested", true)
@@ -407,7 +417,7 @@ private fun HomePreview() {
 }
 
 @Composable
-private fun Stepper(title: String, value: Int, range: IntRange, onChange: (Int) -> Unit) {
+internal fun Stepper(title: String, value: Int, range: IntRange, onChange: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 14.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 15.sp, modifier = Modifier.weight(1f))
         StepButton("−", "Fewer ${title.lowercase()}", value > range.first) { onChange(value - 1) }
