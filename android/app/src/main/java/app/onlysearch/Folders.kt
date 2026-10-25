@@ -101,7 +101,6 @@ private fun FolderSheet(apps: Apps, key: String, onClose: () -> Unit) {
                 ) {
                     Field(name, { name = it }, "Folder name", Modifier.fillMaxWidth(), autoFocus = false, fontSize = 18) { save() }
                     AppGrid(apps, folder.apps.mapNotNull(apps::byKey), 52.dp, Fg, columns = 4, rowGap = 16.dp, drag = from)
-                    Text("drag an app out to take it out of the folder", color = Muted, fontSize = 11.sp, fontFamily = Mono)
                 }
             }
         }
