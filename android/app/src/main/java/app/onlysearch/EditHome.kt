@@ -120,7 +120,7 @@ fun EditHome(apps: Apps, widgets: Widgets, onDone: (Int) -> Unit, onPickWidget: 
                     Icon(Ic.home, null, tint = Accent, modifier = Modifier.size(16.dp))
                     Text("Default page", color = Accent, fontSize = 13.sp)
                 }
-                else -> Chip("Set as default page", FieldBg, ChipLine, Inter, 13) { apps.makeDefault(state.currentPage) }
+                else -> Chip("Set as default page", FieldBg, ChipLine, Sans, 13) { apps.makeDefault(state.currentPage) }
             }
             if (onPage && apps.pages.size > 1) Box(
                 Modifier.size(34.dp).clip(CircleShape).border(1.dp, ChipLine, CircleShape).semantics { contentDescription = "Delete page" }

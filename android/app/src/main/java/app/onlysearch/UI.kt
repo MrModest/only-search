@@ -162,7 +162,7 @@ import java.util.Date
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-// Mock-up 2026-10-24 (docs/Mock-up 2026-10-24.html): soft dark tiles and cards, sky-blue accent, Inter + JetBrains Mono.
+// Mock-up 2026-10-24 (docs/Mock-up 2026-10-24.html): soft dark tiles and cards, sky-blue accent, Sans + JetBrains Mono.
 // Motion follows Nova Launcher: finger-tracked drawer, icon zoom launches, press scale, popup shortcuts.
 // Sheet, Scrim and the accent colours follow Settings › Look & feel; reading them in composition keeps the UI in sync.
 internal val Sheet get() = if (prefs.black) Color.Black else Color(0xFF0E0F12)
@@ -194,7 +194,10 @@ internal val Settle = spring<Float>(dampingRatio = 0.9f, stiffness = 420f)
 
 internal fun family(res: Int, vararg weights: Int) =
     FontFamily(weights.map { Font(res, FontWeight(it), variationSettings = FontVariation.Settings(FontVariation.weight(it))) })
-internal val Inter = family(R.font.inter, 300, 400, 500, 600, 700)
+/** The phone's own UI font (Google Sans Text on a Pixel), else plain sans-serif. */
+internal val Sans: FontFamily = android.content.res.Resources.getSystem().run {
+    getIdentifier("config_bodyFontFamily", "string", "android").takeIf { it != 0 }?.let(::getString)?.takeIf { it.isNotBlank() }
+}?.let { FontFamily(android.graphics.Typeface.create(it, android.graphics.Typeface.NORMAL)) } ?: FontFamily.Default
 internal val Mono = family(R.font.jetbrains_mono, 400, 500, 700)
 
 /** Stroked 24×24 line icon from SVG path data, the way the mock-up draws them. */
@@ -397,7 +400,7 @@ fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: I
     }
 
     CompositionLocalProvider(LocalDragDrop provides dnd, LocalPickWidgets provides { pkg: String? -> pickFor = pkg; picking = true }) {
-    ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
+    ProvideTextStyle(TextStyle(fontFamily = Sans, color = Fg)) {
         // Follows a drag from the root: the tile that started it may be disposed mid-drag (its page scrolled away).
         Box(Modifier.fillMaxSize().pointerInput(Unit) {
             awaitEachGesture {
@@ -1091,7 +1094,7 @@ internal fun AppPopup(apps: Apps, app: App, anchor: Rect, hint: Boolean, onDismi
     var renaming by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(22.dp)
     Popup(popupPositionProvider = FullScreen, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true, clippingEnabled = false)) {
-        ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
+        ProvideTextStyle(TextStyle(fontFamily = Sans, color = Fg)) {
             var root by remember { mutableStateOf<LayoutCoordinates?>(null) }
             Box(Modifier.fillMaxSize().onGloballyPositioned { root = it }.graphicsLayer { alpha = if (dragging) 0f else 1f }) {
                 val r = root?.takeIf { it.isAttached }
@@ -1586,7 +1589,7 @@ internal fun TopHit(apps: Apps, app: App, range: IntRange?, shortcuts: List<Shor
                     .border(1.dp, Color(0xFF2C4E6C), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp))
             }
             if (shortcuts.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                shortcuts.forEach { s -> Chip(s.label, Color(0xFF16232F), AccentLine, Inter, 13) { apps.launch(s, source()) } }
+                shortcuts.forEach { s -> Chip(s.label, Color(0xFF16232F), AccentLine, Sans, 13) { apps.launch(s, source()) } }
             }
         }
         if (menu) AppPopup(apps, app, anchor(), hint = false) { menu = false }
@@ -1630,7 +1633,7 @@ private fun ContactsPrompt(onAllow: () -> Unit, onOff: () -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(start = 14.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Find people in your contacts", fontSize = 14.sp, color = Muted, modifier = Modifier.weight(1f))
-        Chip("Allow", Color(0xFF16232F), AccentLine, Inter, 13, onAllow)
+        Chip("Allow", Color(0xFF16232F), AccentLine, Sans, 13, onAllow)
         Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onOff).semantics { contentDescription = "Turn off people results" },
             contentAlignment = Alignment.Center) { Icon(Ic.close, null, tint = Dim, modifier = Modifier.size(16.dp)) }
     }
@@ -1694,7 +1697,7 @@ internal fun Field(value: String, onValue: (String) -> Unit, hint: String, modif
     if (field.text != value) field = TextFieldValue(value, TextRange(value.length))
     BasicTextField(
         field, { field = it; if (it.text != value) onValue(it.text) }, modifier.focusRequester(focus),
-        textStyle = TextStyle(color = Fg, fontSize = fontSize.sp, fontFamily = Inter, textAlign = align),
+        textStyle = TextStyle(color = Fg, fontSize = fontSize.sp, fontFamily = Sans, textAlign = align),
         singleLine = true,
         cursorBrush = SolidColor(Accent),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go, autoCorrectEnabled = false),

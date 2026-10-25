@@ -31,7 +31,7 @@ fun GroupEditor(apps: Apps, index: Int, onClose: () -> Unit) {
     val chosen = remember { mutableStateListOf<String>().apply { addAll(old?.apps.orEmpty()) } }
     var filter by remember { mutableStateOf("") }
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
+        ProvideTextStyle(TextStyle(fontFamily = Sans, color = Fg)) {
             Column(Modifier.fillMaxSize().background(SettingsBg).systemBarsPadding().imePadding().padding(horizontal = 16.dp)) {
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp).offset(x = (-8).dp), verticalAlignment = Alignment.CenterVertically) {
                     BackButton(onClose)

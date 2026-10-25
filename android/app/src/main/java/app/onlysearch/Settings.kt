@@ -326,7 +326,7 @@ internal fun SwitchRow(title: String, subtitle: String?, checked: Boolean, monoS
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, fontSize = 15.sp, lineHeight = 18.sp)
-            if (subtitle != null) Text(subtitle, color = Muted, fontSize = if (monoSubtitle) 11.sp else 12.sp, lineHeight = 15.sp, fontFamily = if (monoSubtitle) Mono else Inter)
+            if (subtitle != null) Text(subtitle, color = Muted, fontSize = if (monoSubtitle) 11.sp else 12.sp, lineHeight = 15.sp, fontFamily = if (monoSubtitle) Mono else Sans)
         }
         Switch(checked, title, onChange)
     }
@@ -473,7 +473,7 @@ private fun DrawerSettings(apps: Apps) {
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     AppIcon(apps, app, 34.dp)
                     Text(app.label, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                    Chip("Unhide", Color.Transparent, ChipLine, Inter, 13) { apps.hide(app, false) }
+                    Chip("Unhide", Color.Transparent, ChipLine, Sans, 13) { apps.hide(app, false) }
                 }
             }
         })

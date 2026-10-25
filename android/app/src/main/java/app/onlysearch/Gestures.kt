@@ -94,7 +94,7 @@ fun openAccessibilitySettings(context: Context) =
 internal fun LockPrompt(onClose: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     Dialog(onClose) {
-        ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
+        ProvideTextStyle(TextStyle(fontFamily = Sans, color = Fg)) {
             Column(Modifier.clip(RoundedCornerShape(22.dp)).background(PopupBg).border(1.dp, PillLine, RoundedCornerShape(22.dp)).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text("Lock the screen with a gesture?", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
@@ -143,7 +143,7 @@ private fun ActionPicker(apps: Apps, title: String, current: String, onPick: (St
     var filter by remember { mutableStateOf("") }
     var open by remember { mutableStateOf<String?>(null) }
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
+        ProvideTextStyle(TextStyle(fontFamily = Sans, color = Fg)) {
             Column(Modifier.fillMaxSize().background(SettingsBg).systemBarsPadding().imePadding().padding(horizontal = 16.dp)) {
                 Row(Modifier.padding(top = 8.dp).offset(x = (-8).dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     BackButton(onClose)

@@ -108,7 +108,7 @@ private fun FolderSheet(apps: Apps, key: String, icon: Dp, cell: Dp, onClose: ()
     }
     BackHandler { save(); onClose() }
     Popup(popupPositionProvider = OverAnchor, onDismissRequest = { save(); onClose() }, properties = PopupProperties(focusable = true)) {
-        ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
+        ProvideTextStyle(TextStyle(fontFamily = Sans, color = Fg)) {
             val list = folder.apps.mapNotNull(apps::byKey)
             val columns = when { list.size <= 3 -> list.size.coerceAtLeast(1); list.size <= 9 -> 3; else -> 4 }
             Column(

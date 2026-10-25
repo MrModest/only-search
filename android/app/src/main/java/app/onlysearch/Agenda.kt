@@ -251,7 +251,7 @@ internal fun CalendarPicker(key: String, onClose: () -> Unit) {
     val context = LocalContext.current
     val all = remember { calendars(context) }
     Dialog(onClose) {
-        ProvideTextStyle(TextStyle(fontFamily = Inter, color = Fg)) {
+        ProvideTextStyle(TextStyle(fontFamily = Sans, color = Fg)) {
             Column(Modifier.clip(RoundedCornerShape(22.dp)).background(PopupBg).border(1.dp, PillLine, RoundedCornerShape(22.dp)).padding(vertical = 18.dp)) {
                 if (key.startsWith("b:day:")) {
                     Text("Time range", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 20.dp))
