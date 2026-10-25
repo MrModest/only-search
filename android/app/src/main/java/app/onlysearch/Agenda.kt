@@ -4,6 +4,9 @@ import android.Manifest
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.CalendarContract
@@ -80,14 +83,14 @@ fun calendars(context: Context): List<CalendarInfo> {
     return out.sortedWith(compareBy({ it.account }, { it.name.lowercase() }))
 }
 
-/** Bumped when calendar access is granted, so open agenda widgets reload. */
-private var calendarGrants by mutableIntStateOf(0)
+/** Bumped when calendar access is granted or calendar data changes, so open agenda widgets reload. */
+private var calendarChanges by mutableIntStateOf(0)
 
 /** Today's events, refreshed once a minute; empty without permission. */
 @Composable
 fun rememberEvents(): List<Event> {
     val context = LocalContext.current
-    return produceState(emptyList(), calendarGrants) {
+    return produceState(emptyList(), calendarChanges) {
         while (true) {
             value = withContext(Dispatchers.IO) { todaysEvents(context) }
             kotlinx.coroutines.delay(60_000 - System.currentTimeMillis() % 60_000)
@@ -154,8 +157,13 @@ internal fun BuiltinWidget(cell: Cell, modifier: Modifier = Modifier, preview: B
     val kind = Builtins.firstOrNull { it.kind == cell.builtin } ?: return
     if (!kind.agenda) return Clock(modifier.fillMaxSize())
     val context = LocalContext.current
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { if (it) calendarGrants++ }
-    if (calendarGrants >= 0 && !hasCalendar(context)) return Column(
+    DisposableEffect(Unit) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) { override fun onChange(selfChange: Boolean) { calendarChanges++ } }
+        context.contentResolver.registerContentObserver(CalendarContract.CONTENT_URI, true, observer)
+        onDispose { context.contentResolver.unregisterContentObserver(observer) }
+    }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { if (it) calendarChanges++ }
+    if (calendarChanges >= 0 && !hasCalendar(context)) return Column(
         modifier.fillMaxSize().clip(RoundedCornerShape(WidgetCorner)).background(Card.copy(alpha = 0.82f)).border(1.dp, CardLine, RoundedCornerShape(WidgetCorner))
             .then(if (preview) Modifier else Modifier.clickable { ask.launch(Manifest.permission.READ_CALENDAR) }).padding(horizontal = 14.dp),
         verticalArrangement = Arrangement.Center,
@@ -167,7 +175,7 @@ internal fun BuiltinWidget(cell: Cell, modifier: Modifier = Modifier, preview: B
     when (kind.kind) {
         "event" -> NextEventLine(rememberEvents().filter { it.calendar !in hidden })
         "today" -> TodayCard(rememberEvents().filter { it.calendar !in hidden }, modifier)
-        else -> DayCard(hidden, prefs.dayRange(cell.key), modifier)
+        else -> DayCard(hidden, prefs.dayRange(cell.key), prefs.dayTrim(cell.key), modifier)
     }
 }
 
@@ -176,13 +184,13 @@ private const val HourMs = 3_600_000L
 /**
  * Timed events from [range].first hours before the current hour to [range].second hours after it, each hour the same
  * height, so events are as tall as they last (15:30–17:30 fills half of 15:00, all of 16:00, half of 17:00).
- * Overlapping events share the width.
+ * Overlapping events share the width. Each day's [trim] hours (from, until) collapse into a 2-hour gap when no event touches them.
  */
 @Composable
-private fun DayCard(hidden: Set<Long>, range: Pair<Int, Int>, modifier: Modifier) {
+private fun DayCard(hidden: Set<Long>, range: Pair<Int, Int>, trim: Pair<Int, Int>?, modifier: Modifier) {
     val hours = range.first + range.second
     val context = LocalContext.current
-    val (start, now, all) = produceState(Triple(0L, 0L, emptyList<Event>()), calendarGrants, range) {
+    val (start, now, all) = produceState(Triple(0L, 0L, emptyList<Event>()), calendarChanges, range) {
         while (true) {
             val now = System.currentTimeMillis()
             val start = now - now % HourMs - range.first * HourMs
@@ -191,23 +199,52 @@ private fun DayCard(hidden: Set<Long>, range: Pair<Int, Int>, modifier: Modifier
         }
     }.value
     val timed = all.filter { !it.allDay && it.calendar !in hidden && it.end > start }
+    val end = start + hours * HourMs
+    val gaps = trim?.let { (from, until) ->
+        (-1..2).mapNotNull { d ->
+            fun at(h: Int, days: Int) = Calendar.getInstance().apply {
+                timeInMillis = start; add(Calendar.DAY_OF_YEAR, d + days); set(Calendar.HOUR_OF_DAY, h); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            val f = maxOf(at(from, 0), start); val t = minOf(at(until, if (until <= from) 1 else 0), end)
+            (f to t).takeIf { t - f > 2 * HourMs && timed.none { it.begin < t && it.end > f } }
+        }
+    }.orEmpty()
+    // Screen position in hours: plain hours count as one, a gap as two however long it is.
+    fun pos(t: Long): Float {
+        var shift = 0L
+        for ((f, to) in gaps) {
+            if (t >= to) shift += to - f - 2 * HourMs
+            else if (t > f) return (f - start - shift + (t - f) * 2 * HourMs / (to - f)) / HourMs.toFloat()
+        }
+        return (t - start - shift) / HourMs.toFloat()
+    }
     val shape = RoundedCornerShape(WidgetCorner)
     Column(modifier.fillMaxSize().clip(shape).background(Card.copy(alpha = 0.82f)).border(1.dp, CardLine, shape).clickable { openCalendar(context) }
         .padding(horizontal = 10.dp, vertical = 10.dp)) {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val hour = maxHeight / hours
+            val hour = maxHeight / pos(end)
             val labelW = if (DateFormat.is24HourFormat(context)) 40.dp else 48.dp
             val step = listOf(1, 2, 3, 4, 6).firstOrNull { hour * it >= 14.dp } ?: 12
-            // Quarter and half hour lines once there's room for them.
+            // Hour lines, plus quarter and half hour lines once there's room for them; none inside a gap.
             val ticks = if (hour >= 96.dp) 4 else if (hour >= 48.dp) 2 else 1
-            for (q in 1 until hours * ticks) if (q % ticks != 0)
-                Box(Modifier.offset(x = labelW, y = hour * q / ticks).fillMaxWidth().height(1.dp).background(CardLine.copy(alpha = 0.45f)))
-            for (i in 0..hours) {
-                Box(Modifier.offset(x = labelW, y = hour * i).fillMaxWidth().height(1.dp).background(CardLine))
-                if (i % step == 0 && i < hours) Text(
-                    DateFormat.format(if (DateFormat.is24HourFormat(context)) "HH:00" else "h a", Date(start + i * HourMs)).toString(),
-                    color = Dim, fontSize = 10.sp, fontFamily = Mono, maxLines = 1, modifier = Modifier.offset(y = hour * i - 6.dp),
+            val clock = Calendar.getInstance()
+            for (q in 0..hours * ticks) {
+                val t = start + q * HourMs / ticks
+                if (gaps.any { t > it.first && t < it.second }) continue
+                val whole = q % ticks == 0
+                Box(Modifier.offset(x = labelW, y = hour * pos(t)).fillMaxWidth().height(1.dp).background(if (whole) CardLine else CardLine.copy(alpha = 0.45f)))
+                clock.timeInMillis = t
+                if (whole && t < end && clock.get(Calendar.HOUR_OF_DAY) % step == 0) Text(
+                    DateFormat.format(if (DateFormat.is24HourFormat(context)) "HH:00" else "h a", Date(t)).toString(),
+                    color = Dim, fontSize = 10.sp, fontFamily = Mono, maxLines = 1, modifier = Modifier.offset(y = hour * pos(t) - 6.dp),
                 )
+            }
+            gaps.forEach { (f, to) ->
+                Box(
+                    Modifier.offset(x = labelW, y = hour * pos(f) + 3.dp).fillMaxWidth().height(hour * 2 - 6.dp).clip(RoundedCornerShape(3.dp))
+                        .background(CardLine.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center,
+                ) { Text("${(to - f) / HourMs} h skipped", color = Muted, fontSize = 11.sp, maxLines = 1) }
             }
             // Overlapping runs of events split the width into lanes, each event taking the first lane free when it starts.
             val lane = IntArray(timed.size); val lanes = IntArray(timed.size)
@@ -225,8 +262,8 @@ private fun DayCard(hidden: Set<Long>, range: Pair<Int, Int>, modifier: Modifier
             }
             val width = maxWidth - labelW - 4.dp
             timed.forEachIndexed { k, e ->
-                val top = hour * ((e.begin - start).coerceAtLeast(0) / HourMs.toFloat())
-                val bottom = hour * ((e.end - start).coerceAtMost(hours * HourMs) / HourMs.toFloat())
+                val top = hour * pos(e.begin.coerceAtLeast(start))
+                val bottom = hour * pos(e.end.coerceAtMost(end))
                 val w = width / lanes[k]
                 Column(
                     Modifier.offset(x = labelW + 4.dp + w * lane[k], y = top).size(w - 2.dp, (bottom - top - 1.dp).coerceAtLeast(3.dp))
@@ -238,7 +275,7 @@ private fun DayCard(hidden: Set<Long>, range: Pair<Int, Int>, modifier: Modifier
                     if (bottom - top >= 28.dp) Text("${hm(context, e.begin)} – ${hm(context, e.end)}", fontSize = 10.sp, lineHeight = 12.sp, color = Muted, maxLines = 1)
                 }
             }
-            val y = hour * ((now - start) / HourMs.toFloat())
+            val y = hour * pos(now)
             Box(Modifier.offset(x = labelW - 3.dp, y = y - 3.dp).size(6.dp).clip(CircleShape).background(Accent))
             Box(Modifier.offset(x = labelW, y = y - 1.dp).fillMaxWidth().height(2.dp).background(Accent))
         }
@@ -259,6 +296,15 @@ internal fun CalendarPicker(key: String, onClose: () -> Unit) {
                     Column(Modifier.padding(horizontal = 6.dp, vertical = 6.dp)) {
                         Stepper("Hours before now", back, 0..12) { prefs.setDayRange(key, it to ahead) }
                         Stepper("Hours after now", ahead, 1..24) { prefs.setDayRange(key, back to it) }
+                    }
+                    // Hours that collapse into a small gap when nothing's on, e.g. the night.
+                    val trim = prefs.dayTrim(key)
+                    Column(Modifier.padding(horizontal = 6.dp)) {
+                        SwitchRow("Skip empty hours", "A small gap instead, unless an event falls in them", trim != null) { prefs.setDayTrim(key, if (it) 0 to 7 else null) }
+                    }
+                    if (trim != null) Column(Modifier.padding(horizontal = 6.dp)) {
+                        Stepper("Skip from (hour)", trim.first, 0..23) { prefs.setDayTrim(key, it to trim.second) }
+                        Stepper("Until (hour)", trim.second, 0..23) { prefs.setDayTrim(key, trim.first to it) }
                     }
                 }
                 Text("Calendars", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 20.dp))

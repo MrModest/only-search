@@ -133,15 +133,23 @@ class Prefs(context: Context) {
     fun hiddenCalendars(key: String) = hiddenCals[key].orEmpty()
     fun setHiddenCalendars(key: String, ids: Set<Long>) { hiddenCals[key] = ids; sp.edit { putString("cals:$key", ids.joinToString(",")) } }
 
-    // Hours a Day widget shows before and after the current hour, by widget key
-    private val dayRanges = mutableStateMapOf<String, Pair<Int, Int>>().apply {
+    // Per Day widget, by widget key: hours shown before and after the current hour, and the hours of the day it skips
+    private fun hourPairs(prefix: String) = mutableStateMapOf<String, Pair<Int, Int>>().apply {
         sp.all.forEach { (k, v) ->
-            val (b, a) = (v as? String)?.split(",")?.mapNotNull { it.toIntOrNull() }?.takeIf { k.startsWith("range:") && it.size == 2 } ?: return@forEach
-            put(k.removePrefix("range:"), b to a)
+            val (a, b) = (v as? String)?.split(",")?.mapNotNull { it.toIntOrNull() }?.takeIf { k.startsWith(prefix) && it.size == 2 } ?: return@forEach
+            put(k.removePrefix(prefix), a to b)
         }
     }
+    private val dayRanges = hourPairs("range:")
+    private val dayTrims = hourPairs("trim:")
     fun dayRange(key: String) = dayRanges[key] ?: (4 to 20)
     fun setDayRange(key: String, r: Pair<Int, Int>) { dayRanges[key] = r; sp.edit { putString("range:$key", "${r.first},${r.second}") } }
+    /** Hours of the day (from, until) the widget collapses when nothing's on, or null. */
+    fun dayTrim(key: String) = dayTrims[key]
+    fun setDayTrim(key: String, t: Pair<Int, Int>?) {
+        if (t == null) { dayTrims.remove(key); sp.edit { remove("trim:$key") } }
+        else { dayTrims[key] = t; sp.edit { putString("trim:$key", "${t.first},${t.second}") } }
+    }
 
     // App drawer
     var drawerColumns by P("set.drawerColumns", 4)
