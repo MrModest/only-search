@@ -70,6 +70,8 @@ class Apps(private val context: Context) {
     val icons = mutableStateMapOf<String, ImageBitmap>()
     /** Monochrome layers (Android 13+), white; drawn tinted when themed icons are on. */
     val monoIcons = mutableStateMapOf<String, ImageBitmap>()
+    /** Icons that come from the icon pack, already shaped: drawn as they are, not clipped to our icon shape. */
+    val packed = mutableStateMapOf<String, Boolean>()
     val pages = mutableStateListOf<HomePage>().apply { addAll(loadPages()) }
     var defaultPage by mutableIntStateOf(sp.getInt("defaultPage", 0).coerceIn(pages.indices))
     /** The page on screen; new pins and widgets land here. */
@@ -108,9 +110,13 @@ class Apps(private val context: Context) {
                 .sortedBy { it.first.label.lowercase() }
             val size = (56 * context.resources.displayMetrics.density).toInt()
             val fresh = apps.filter { it.first.key !in icons }
-            apps to (fresh.associate { (app, info) -> app.key to squareIcon(info.getIcon(0), size) } to
-                fresh.mapNotNull { (app, info) -> monoIcon(info.getIcon(0), size)?.let { app.key to it } }.toMap())
-        }
+            val pack = prefs.iconPack.takeIf { it.isNotEmpty() }?.let { runCatching { IconPack(context, it) }.getOrNull() }
+            val fromPack = fresh.mapNotNull { (app, info) ->
+                runCatching { pack?.icon(app.component, size) ?: pack?.fallback(info.getIcon(0), size) }.getOrNull()?.let { app.key to it }
+            }.toMap()
+            apps to (fresh.associate { (app, info) -> app.key to (fromPack[app.key] ?: squareIcon(info.getIcon(0), size)) } to
+                fresh.mapNotNull { (app, info) -> monoIcon(info.getIcon(0), size)?.let { app.key to it } }.toMap()) to fromPack.keys
+        }.let { (a, packedKeys) -> a.also { packedKeys.forEach { packed[it] = true } } }
         icons.putAll(newIcons.first)
         monoIcons.putAll(newIcons.second)
         sp.all.forEach { (k, v) -> if (k.startsWith("count:") && v is Int) counts[k.removePrefix("count:")] = v }
@@ -119,6 +125,9 @@ class Apps(private val context: Context) {
         if (!sp.getBoolean("builtins", false)) migrateBuiltins()
         loaded.value = true
     }
+
+    /** After the icon pack changes. */
+    suspend fun reloadIcons() { icons.clear(); monoIcons.clear(); packed.clear(); load() }
 
     fun count(app: App) = counts[app.key] ?: 0
     fun lastLaunch(app: App) = sp.getLong("last:${app.key}", 0L)

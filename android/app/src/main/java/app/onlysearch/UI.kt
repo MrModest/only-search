@@ -1055,8 +1055,10 @@ internal fun iconShape(name: String, size: Dp): Shape = when (name) {
 @Composable
 internal fun AppIcon(apps: Apps, app: App, size: Dp, modifier: Modifier = Modifier, ring: Boolean = false) {
     val bmp = apps.icons[app.key]
-    val mono = if (prefs.themedIcons) apps.monoIcons[app.key] else null
     val shape = iconShape(prefs.iconShape, size)
+    // Icon-pack icons keep the pack's own shape.
+    if (bmp != null && apps.packed[app.key] == true) return Image(bmp, app.label, modifier.size(size).then(if (ring) Modifier.border(2.dp, Accent, shape) else Modifier))
+    val mono = if (prefs.themedIcons) apps.monoIcons[app.key] else null
     val m = modifier.size(size).then(if (ring) Modifier.border(2.dp, Accent, shape) else Modifier).clip(shape)
     // Themed: the app's monochrome layer in the accent colour on a plain tile (Android 13+ apps that ship one).
     if (mono != null) Image(mono, app.label, m.background(Tile), colorFilter = ColorFilter.tint(Accent))

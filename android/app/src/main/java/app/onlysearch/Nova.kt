@@ -161,6 +161,8 @@ private fun importNova(context: Context, db: SQLiteDatabase, novaPrefs: Map<Stri
         s.getOrNull(1)?.let { prefs.labels = it == "true" }
     }
     novaPrefs["drawer_grid"]?.let { Regex("\\d+x(\\d+)").find(it)?.groupValues?.get(1)?.toIntOrNull() }?.let { prefs.drawerColumns = it.coerceIn(3, 6) }
+    // "Exported Icon Pack:GO:ginlemon.iconpackstudio.exported:false" = name : type : package : …
+    novaPrefs["theme_icon_pack"]?.split(":")?.getOrNull(2)?.takeIf { p -> iconPacks(context).any { it.first == p } }?.let { prefs.iconPack = it }
     novaPrefs["drawer_predictive_apps"]?.let { prefs.suggested = it == "true" }
     mapOf("gesture_swipe_up" to "gUp", "gesture_swipe_down" to "gDown", "gesture_two_finger_scroll_down" to "gTwoDown",
         "gesture_double_tap" to "gDoubleTap", "gesture_pinch" to "gPinch").forEach { (nova, ours) ->

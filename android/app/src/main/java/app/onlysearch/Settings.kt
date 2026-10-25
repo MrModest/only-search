@@ -120,6 +120,8 @@ class Prefs(context: Context) {
     var accent by P("set.accent", "sky")
     var black by P("set.black", false)
     var themedIcons by P("set.themedIcons", false)
+    /** Package of the icon pack in use, or "" for the apps' own icons. */
+    var iconPack by P("set.iconPack", "")
     var dim by P("set.dim", 0)
 
     // Calendars each built-in agenda widget leaves out, by widget key
@@ -194,7 +196,7 @@ private fun settingsPages(apps: Apps): List<Page> = listOf(
         "gestures swipe double tap pinch home button dock lock notifications type anywhere keyboard reset query") { GestureSettings(apps) },
     Page("look", "Behaviour", SIc.look, false, "Look & feel",
         { listOfNotNull(if (prefs.black) "Black" else "Dark", "${prefs.accent} accent", "themed icons".takeIf { prefs.themedIcons }).joinToString(" · ") },
-        "theme accent colour color dark black themed icons monochrome wallpaper dim") { LookSettings() },
+        "theme accent colour color dark black themed icons monochrome wallpaper dim icon pack") { LookSettings(apps) },
     Page("backup", "System", SIc.backup, false, "Backup & restore",
         { "Last backup: " + prefs.sp.getLong("lastBackup", 0L).let { if (it == 0L) "never" else ago(it) } },
         "backup restore export import json file nova launcher") { BackupSettings(apps) },
@@ -615,8 +617,29 @@ private fun DockSettings() {
 }
 
 @Composable
-private fun LookSettings() {
+private fun LookSettings(apps: Apps) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val packs = remember { iconPacks(context) }
+    var choosing by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Group("Icons", listOf {
+            Box {
+                ValueRow("Icon pack", packs.firstOrNull { it.first == prefs.iconPack }?.second ?: "App icons") { choosing = true }
+                Box(Modifier.align(Alignment.BottomEnd)) {
+                    DropdownMenu(choosing, { choosing = false }, containerColor = PopupBg) {
+                        (listOf("" to "App icons") + packs).forEach { (pkg, name) ->
+                            DropdownMenuItem({ Text(name, color = if (pkg == prefs.iconPack) Accent else Fg) }, {
+                                choosing = false
+                                if (pkg != prefs.iconPack) { prefs.iconPack = pkg; scope.launch { apps.reloadIcons() } }
+                            })
+                        }
+                    }
+                }
+            }
+        })
+        if (packs.isEmpty()) Text("No icon packs installed. Packs made for Nova or ADW work, e.g. ones exported by Icon Pack Studio.",
+            color = Dim, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp).offset(y = (-10).dp))
         Group("Accent", listOf {
             Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Accents.forEach { (name, color) ->
