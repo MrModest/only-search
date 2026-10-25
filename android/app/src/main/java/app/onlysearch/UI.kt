@@ -252,7 +252,8 @@ fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: I
     LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect { apps.currentPage = it } }
     val dnd = remember { DragDrop() }
     // An app dragged out of search results: search stays composed (it owns the gesture) but home shows through.
-    val searchDrag = dnd.item?.from == "search"
+    // Search stays composed (just faded) while something dragged out of it is in flight; closing it would cancel the drag.
+    val searchDrag = dnd.item?.from == "search" || (searching && dnd.item?.from == "popup")
     val searchProgress by animateFloatAsState(if (searching && !searchDrag) 1f else 0f, tween(180), label = "search")
     val keyboard = LocalSoftwareKeyboardController.current
 
@@ -346,12 +347,12 @@ fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: I
     }
 
     dnd.onStart = {
-        if (it.from == "drawer" || it.from == "popup") { settleDrawer(false); closeSearch() }
-        if (it.from == "search") keyboard?.hide()
+        if (it.from == "drawer" || it.from == "popup") settleDrawer(false)
+        if (it.from == "search" || it.from == "popup") keyboard?.hide()
         if (it.from == "picker" && editing) { editing = false; scope.launch { pager.scrollToPage(apps.currentPage) } }
     }
     dnd.onDrop = { d, at ->
-        if (d.from == "search") closeSearch()
+        if (d.from == "search" || d.from == "popup") closeSearch()
         // The close started on pickup can be cut short (e.g. drawer opened over search); finish it so no half-open drawer covers home.
         if (d.from == "drawer" || d.from == "popup") settleDrawer(false)
         val page = pager.currentPage
@@ -1010,7 +1011,13 @@ internal fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifie
             if (labelColor != null) Text(app.label, color = labelColor, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = shadowed(), modifier = Modifier.padding(top = 7.dp, start = 2.dp, end = 2.dp))
         }
-        if (menu) AppPopup(apps, app, anchor(), hint = canDrag && drag != "drawer") { menu = false }
+        // On home (grid, dock, folder) the menu offers Remove instead of Hide.
+        val remove = when {
+            drag == "grid" || drag == "dock" -> { { apps.removeItem(app.key); if (apps.dock.remove(app.key)) apps.saveDock() } }
+            drag?.startsWith("folder:") == true -> { { apps.takeFromFolder(drag.removePrefix("folder:"), app.key) } }
+            else -> null
+        }
+        if (menu) AppPopup(apps, app, anchor(), hint = canDrag && drag != "drawer", onRemove = remove) { menu = false }
     }
 }
 
@@ -1024,14 +1031,17 @@ internal fun ShortcutTile(apps: Apps, key: String, labelColor: Color?, size: Dp)
     val (track, source) = rememberLaunchSource()
     val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val lifted = dnd.item?.key == key
+    var menu by remember { mutableStateOf(false) }
+    Box {
     Column(
         Modifier.fillMaxWidth().onGloballyPositioned { coords[0] = it }.graphicsLayer { alpha = if (lifted) 0.25f else 1f }
             .semantics { onClick { s?.let { apps.launch(it, source()) }; true } }
             .pointerInput(key, prefs.lockLayout) {
                 tapHoldDrag(
                     { coords[0] }, onTap = { s?.let { apps.launch(it, source()) } },
-                    onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                    onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menu = true },
                     onDragStart = if (prefs.lockLayout) null else { _, at ->
+                        menu = false
                         val px = size.toPx()
                         dnd.start(Dragged(key, prefs.appSpan, prefs.appSpan, "grid", Offset(px / 2, px / 2), Size(px, px), icon), at)
                     },
@@ -1048,6 +1058,11 @@ internal fun ShortcutTile(apps: Apps, key: String, labelColor: Color?, size: Dp)
         }
         if (labelColor != null) Text(s?.label ?: "Unavailable", color = labelColor, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             style = shadowed(), modifier = Modifier.padding(top = 7.dp, start = 2.dp, end = 2.dp))
+    }
+    DropdownMenu(menu, { menu = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
+        s?.app?.let { DropdownMenuItem({ Text("App info") }, { menu = false; apps.appInfo(it) }) }
+        DropdownMenuItem({ Text("Remove") }, { menu = false; apps.removeItem(key); if (apps.dock.remove(key)) apps.saveDock() })
+    }
     }
 }
 
@@ -1098,7 +1113,7 @@ internal object FullScreen : PopupPositionProvider {
  * Shortcuts open on tap, or can be dragged out of the card onto home to pin them. [anchor] is in screen coordinates.
  */
 @Composable
-internal fun AppPopup(apps: Apps, app: App, anchor: Rect, hint: Boolean, onDismiss: () -> Unit) {
+internal fun AppPopup(apps: Apps, app: App, anchor: Rect, hint: Boolean, onRemove: (() -> Unit)? = null, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val dnd = LocalDragDrop.current
     val pickWidgets = LocalPickWidgets.current
@@ -1144,7 +1159,8 @@ internal fun AppPopup(apps: Apps, app: App, anchor: Rect, hint: Boolean, onDismi
                                 if (hasWidgets) PopupAction(Ic.widgets, "Widgets", Fg) { pickWidgets(app.component.packageName); onDismiss() }
                                 PopupAction(Ic.edit, "Edit", Fg) { renaming = true }
                                 val isHidden = app.key in apps.hidden
-                                PopupAction(Ic.hide, if (isHidden) "Unhide" else "Hide", if (isHidden) Accent else Fg) {
+                                if (onRemove != null) PopupAction(Ic.close, "Remove", Fg) { onRemove(); onDismiss() }
+                                else PopupAction(Ic.hide, if (isHidden) "Unhide" else "Hide", if (isHidden) Accent else Fg) {
                                     apps.hide(app, !isHidden)
                                     if (!isHidden) Toast.makeText(context, "${app.label} hidden from the drawer and search", Toast.LENGTH_SHORT).show()
                                     onDismiss()
