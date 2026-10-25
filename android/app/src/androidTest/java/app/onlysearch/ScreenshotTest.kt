@@ -54,7 +54,13 @@ class ScreenshotTest {
     // System Home, like the real button: the launcher animates back to its home screen.
     private fun goHome() {
         instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
-        compose.waitUntil(20_000) { runCatching { compose.onAllNodes(homeIcon("Calendar")).fetchSemanticsNodes().isNotEmpty() }.getOrDefault(false) }
+        compose.waitUntil(20_000) {
+            runCatching {
+                compose.onAllNodes(homeIcon("Calendar")).fetchSemanticsNodes().isNotEmpty() &&
+                    compose.onAllNodes(hasTestTag("searchField")).fetchSemanticsNodes().isEmpty()
+            }.getOrDefault(false)
+        }
+        Thread.sleep(800) // let the drawer or search finish closing
         compose.waitForIdle()
     }
 
@@ -68,6 +74,7 @@ class ScreenshotTest {
         context.getSharedPreferences("launcher", Context.MODE_PRIVATE).edit().clear()
             .putString("dock", listOf("Phone", "Messages", "Chrome", "Camera").mapNotNull(keys::get).joinToString("\n"))
             .putBoolean("seeded", true)
+            .putString("set.gHome", "none") // Home on home would open search between shots
             .putString("home", listOf("Calendar", "Maps", "Photos", "Gmail", "Clock", "Drive", "Files", "Contacts").mapNotNull(keys::get).joinToString("\n"))
             .putString("groups", JSONArray(listOf(
                 "Work" to listOf("Gmail", "Calendar", "Drive", "Files", "Contacts"),
@@ -166,7 +173,11 @@ class ScreenshotTest {
 
         // Long-press beside the clock opens the home menu.
         val homeMenu = { item: String ->
-            compose.onNodeWithTag("home").performTouchInput { longClick(Offset(width * 0.85f, height * 0.2f)) }
+            compose.waitUntil(30_000) {
+                if (compose.onAllNodesWithText(item).fetchSemanticsNodes().isEmpty()) {
+                    runCatching { compose.onNodeWithTag("home").performTouchInput { longClick(Offset(width * 0.85f, height * 0.2f)) } }; false
+                } else true
+            }
             compose.onNodeWithText(item).performClick()
         }
         homeMenu("Edit home")
