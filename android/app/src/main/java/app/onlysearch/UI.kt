@@ -1065,14 +1065,29 @@ internal fun iconShape(name: String, size: Dp): Shape = when (name) {
 internal fun AppIcon(apps: Apps, app: App, size: Dp, modifier: Modifier = Modifier, ring: Boolean = false) {
     val bmp = apps.icons[app.key]
     val shape = iconShape(prefs.iconShape, size)
-    // Icon-pack icons keep the pack's own shape.
-    if (bmp != null && apps.packed[app.key] == true) return Image(bmp, app.label, modifier.size(size).then(if (ring) Modifier.border(2.dp, Accent, shape) else Modifier))
     val mono = if (prefs.themedIcons) apps.monoIcons[app.key] else null
-    val m = modifier.size(size).then(if (ring) Modifier.border(2.dp, Accent, shape) else Modifier).clip(shape)
-    // Themed: the app's monochrome layer in the accent colour on a plain tile (Android 13+ apps that ship one).
-    if (mono != null) Image(mono, app.label, m.background(Tile), colorFilter = ColorFilter.tint(Accent))
-    else if (bmp != null) Image(bmp, app.label, m) else Box(m.background(Tile).border(1.dp, TileLine, shape))
+    val ringed = Modifier.size(size).then(if (ring) Modifier.border(2.dp, Accent, shape) else Modifier)
+    val m = ringed.clip(shape)
+    Box(modifier) {
+        // Icon-pack icons keep the pack's own shape.
+        if (bmp != null && apps.packed[app.key] == true) Image(bmp, app.label, ringed)
+        // Themed: the app's monochrome layer in the accent colour on a plain tile (Android 13+ apps that ship one).
+        else if (mono != null) Image(mono, app.label, m.background(Tile), colorFilter = ColorFilter.tint(Accent))
+        else if (bmp != null) Image(bmp, app.label, m) else Box(m.background(Tile).border(1.dp, TileLine, shape))
+        if (app.user != android.os.Process.myUserHandle()) {
+            val context = LocalContext.current
+            val badge = remember(app.user) {
+                // The system draws its badge in the corner of a transparent square; we overlay that square.
+                val blank = android.graphics.drawable.BitmapDrawable(context.resources, android.graphics.Bitmap.createBitmap(192, 192, android.graphics.Bitmap.Config.ARGB_8888))
+                badges.getOrPut(app.user) { runCatching { context.packageManager.getUserBadgedIcon(blank, app.user).toBitmap(192, 192).asImageBitmap() }.getOrNull() }
+            }
+            if (badge != null) Image(badge, null, Modifier.offset(size * 0.1f, size * 0.1f).size(size))
+        }
+    }
 }
+
+/** Work-profile badge per user, from the system (the briefcase). */
+private val badges = HashMap<android.os.UserHandle, ImageBitmap?>()
 
 internal object FullScreen : PopupPositionProvider {
     override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize) = IntOffset.Zero
