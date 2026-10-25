@@ -532,14 +532,15 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
             }
             .testTag("home")
     ) {
-    Column(Modifier.fillMaxSize().systemBarsPadding().padding(top = if (prefs.searchBar == "top") 8.dp else 24.dp, bottom = 12.dp)) {
+    Column(Modifier.fillMaxSize().systemBarsPadding().padding(top = 8.dp, bottom = 12.dp)) {
         val pill = @Composable { m: Modifier ->
             Pill("Apps, math, units, time…", m.testTag("homeSearch"), onClick = actions.onSearch) { if (prefs.mic) MicButton(actions.onVoice) }
         }
         if (prefs.searchBar == "top") pill(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 16.dp))
         HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 1, key = { apps.pages.getOrNull(it)?.id ?: -1L }) { i ->
             val page = apps.pages.getOrNull(i) ?: return@HorizontalPager
-            HomeGrid(apps, widgets, i, page, selected, { selected = it }, Modifier.fillMaxSize().padding(horizontal = 18.dp))
+            // Narrow side margins, like Nova's "small": widgets get nearly the full width.
+            HomeGrid(apps, widgets, i, page, selected, { selected = it }, Modifier.fillMaxSize().padding(horizontal = 4.dp))
         }
         Column(Modifier.padding(horizontal = 18.dp)) {
             PageDots(apps.pages.size, pager.currentPage, Modifier.padding(top = 18.dp, bottom = 16.dp))

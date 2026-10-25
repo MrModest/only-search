@@ -91,7 +91,7 @@ class Apps(private val context: Context) {
     }
     val folders = mutableStateMapOf<String, Folder>().apply {
         val o = JSONObject(sp.getString("folders", "{}")!!)
-        o.keys().forEach { k -> o.getJSONObject(k).run { val a = getJSONArray("apps"); put(k, Folder(getString("name"), (0 until a.length()).map(a::getString))) } }
+        o.keys().forEach { k -> val f = o.getJSONObject(k); val a = f.getJSONArray("apps"); put(k, Folder(f.getString("name"), (0 until a.length()).map(a::getString))) }
     }
     private val counts = mutableStateMapOf<String, Int>()
     val loaded = mutableStateOf(false)
