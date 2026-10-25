@@ -245,8 +245,11 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     var editing by remember { mutableStateOf(false) }
     val pager = rememberPagerState(apps.defaultPage) { apps.pages.size }
     LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect { apps.currentPage = it } }
-    val searchProgress by animateFloatAsState(if (searching) 1f else 0f, tween(180), label = "search")
     val dnd = remember { DragDrop() }
+    // An app dragged out of search results: search stays composed (it owns the gesture) but home shows through.
+    val searchDrag = dnd.item?.from == "search"
+    val searchProgress by animateFloatAsState(if (searching && !searchDrag) 1f else 0f, tween(180), label = "search")
+    val keyboard = LocalSoftwareKeyboardController.current
 
     var drawerBlur by remember { mutableStateOf(false) }
     fun settleDrawer(open: Boolean) = scope.launch {
@@ -339,9 +342,13 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
 
     dnd.onStart = {
         if (it.from == "drawer" || it.from == "popup") { settleDrawer(false); closeSearch() }
+        if (it.from == "search") keyboard?.hide()
         if (it.from == "picker" && editing) { editing = false; scope.launch { pager.scrollToPage(apps.currentPage) } }
     }
     dnd.onDrop = { d, at ->
+        if (d.from == "search") closeSearch()
+        // The close started on pickup can be cut short (e.g. drawer opened over search); finish it so no half-open drawer covers home.
+        if (d.from == "drawer" || d.from == "popup") settleDrawer(false)
         val page = pager.currentPage
         val grid = apps.pages.getOrNull(page)?.let { dnd.grids[it.id] }
         val target = grid?.let { dnd.target(d, at, it) }
@@ -427,7 +434,9 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
                 enter = fadeIn(tween(160)) + slideInVertically(tween(220)) { it / 12 },
                 exit = fadeOut(tween(120)) + slideOutVertically(tween(160)) { it / 12 },
             ) {
-                SearchScreen(apps, query, onSettings = { settings = it }) { query = it }
+                Box(Modifier.graphicsLayer { alpha = if (searchDrag) 0f else 1f }) {
+                    SearchScreen(apps, query, onSettings = { settings = it }) { query = it }
+                }
             }
             AnimatedVisibility(editing, enter = fadeIn(tween(160)) + scaleIn(tween(220), 1.06f), exit = fadeOut(tween(140)) + scaleOut(tween(180), 1.06f)) {
                 EditHome(apps, widgets, onDone = { page -> editing = false; scope.launch { pager.scrollToPage(page) } },
@@ -1445,7 +1454,7 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
                 if (recent.isNotEmpty()) item(key = "recent") {
                     Column(Modifier.animateItem().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Label("Recent apps")
-                        AppGrid(apps, recent, size = 52.dp, labelColor = Muted, columns = 5)
+                        AppGrid(apps, recent, size = 52.dp, labelColor = Muted, columns = 5, drag = "search")
                     }
                 }
             } else {
@@ -1464,7 +1473,7 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
                 if (rest.isNotEmpty()) item(key = "apps") {
                     Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Label("Apps", Modifier.padding(horizontal = 4.dp))
-                        AppGrid(apps, rest, size = 52.dp, rowGap = 12.dp)
+                        AppGrid(apps, rest, size = 52.dp, rowGap = 12.dp, drag = "search")
                     }
                 }
                 if (people.isNotEmpty() || wantsPeople) item(key = "people") {
@@ -1538,12 +1547,27 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
 internal fun TopHit(apps: Apps, app: App, range: IntRange?, shortcuts: List<Shortcut>) {
     var menu by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
+    val dnd = LocalDragDrop.current
     val (track, source, anchor) = rememberLaunchSource()
+    val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val shape = RoundedCornerShape(20.dp)
     Box {
         Column(
-            Modifier.fillMaxWidth().clip(shape).background(AccentCard).border(1.dp, AccentLine, shape)
-                .combinedClickable(onLongClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menu = true }) { apps.launch(app, source()) }
+            Modifier.fillMaxWidth().clip(shape).background(AccentCard).border(1.dp, AccentLine, shape).onGloballyPositioned { coords[0] = it }
+                .semantics { onClick { apps.launch(app, source()); true }; onLongClick { menu = true; true } }
+                .pointerInput(app.key) {
+                    // Hold and drag pins the app on home, like a tile; the ghost is the icon.
+                    tapHoldDrag(
+                        { coords[0] }, onTap = { apps.launch(app, source()) },
+                        onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menu = true },
+                        onDragStart = { _, at ->
+                            menu = false
+                            val px = 52.dp.toPx()
+                            dnd.start(Dragged(app.key, prefs.appSpan, prefs.appSpan, "search", Offset(px / 2, px / 2), Size(px, px)), at)
+                        },
+                        onDrag = dnd::move, onDragEnd = dnd::end,
+                    )
+                }
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
