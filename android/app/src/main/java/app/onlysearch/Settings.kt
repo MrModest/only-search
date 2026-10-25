@@ -76,6 +76,8 @@ class Prefs(context: Context) {
     var iconShape by P("set.iconShape", "squircle")
     var labels by P("set.labels", true)
     var lockLayout by P("set.lockLayout", false)
+    /** Cells an app takes each way; 2 on a grid imported from Nova's half-cell layout. */
+    var appSpan by P("set.appSpan", 1)
     var nextEvent by P("set.nextEvent", false)
     var todayCard by P("set.todayCard", false)
 
@@ -120,6 +122,13 @@ class Prefs(context: Context) {
     var themedIcons by P("set.themedIcons", false)
     var dim by P("set.dim", 0)
 
+    // Calendars each built-in agenda widget leaves out, by widget key
+    private val hiddenCals = mutableStateMapOf<String, Set<Long>>().apply {
+        sp.all.forEach { (k, v) -> if (k.startsWith("cals:") && v is String) put(k.removePrefix("cals:"), v.split(",").mapNotNull { it.toLongOrNull() }.toSet()) }
+    }
+    fun hiddenCalendars(key: String) = hiddenCals[key].orEmpty()
+    fun setHiddenCalendars(key: String, ids: Set<Long>) { hiddenCals[key] = ids; sp.edit { putString("cals:$key", ids.joinToString(",")) } }
+
     // App drawer
     var drawerColumns by P("set.drawerColumns", 4)
     var suggested by P("set.suggested", true)
@@ -127,6 +136,10 @@ class Prefs(context: Context) {
 }
 
 lateinit var prefs: Prefs
+
+// The Nova import can need a 10 × 14 grid (Nova's 5 × 7 with half cells).
+internal const val MaxColumns = 10
+internal const val MaxRows = 14
 
 internal val SettingsBg get() = if (prefs.black) Color.Black else Color(0xFF111216)
 internal val GroupLine = Color(0xFF24272D)
@@ -169,7 +182,7 @@ private fun settingsPages(apps: Apps): List<Page> = listOf(
         { (listOf("Apps") + listOfNotNull("contacts".takeIf { prefs.srcContacts }, "settings".takeIf { prefs.srcSettings }, "web".takeIf { prefs.srcWeb })).joinToString(", ") },
         "contacts people settings web engine google duckduckgo fuzzy frequent ranking") { SourcesSettings() },
     Page("home", "Layout", SIc.home, false, "Home screen", { "Grid ${prefs.columns} × ${prefs.rows} · icons ${prefs.iconSize}%" },
-        "columns rows grid icon size shape labels lock layout calendar agenda today event") { HomeSettings() },
+        "columns rows grid icon size shape labels lock layout") { HomeSettings() },
     Page("dock", "Layout", SIc.dock, false, "Dock & search bar",
         { (if (prefs.showDock) "${prefs.dockSize} icons" else "no dock") + " · " + SearchBars.first { it.first == prefs.searchBar }.third },
         "dock icons search bar position top bottom microphone voice") { DockSettings() },
@@ -184,7 +197,7 @@ private fun settingsPages(apps: Apps): List<Page> = listOf(
         "theme accent colour color dark black themed icons monochrome wallpaper dim") { LookSettings() },
     Page("backup", "System", SIc.backup, false, "Backup & restore",
         { "Last backup: " + prefs.sp.getLong("lastBackup", 0L).let { if (it == 0L) "never" else ago(it) } },
-        "backup restore export import json file") { BackupSettings() },
+        "backup restore export import json file nova launcher") { BackupSettings(apps) },
 )
 
 private fun isDefaultHome(context: Context): Boolean =
@@ -326,8 +339,8 @@ internal fun ValueRow(title: String, value: String, valueColor: Color = Accent, 
 private fun HomeSettings() {
     HomePreview()
     Group(null, listOf(
-        { Stepper("Columns", prefs.columns, 3..6) { prefs.columns = it } },
-        { Stepper("Rows", prefs.rows, 1..8) { prefs.rows = it } },
+        { Stepper("Columns", prefs.columns, 3..MaxColumns) { prefs.columns = it } },
+        { Stepper("Rows", prefs.rows, 1..MaxRows) { prefs.rows = it } },
         {
             Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row {
@@ -356,27 +369,6 @@ private fun HomeSettings() {
         { SwitchRow("Show labels", null, prefs.labels) { prefs.labels = it } },
         { SwitchRow("Lock layout", "Prevent accidental moves", prefs.lockLayout) { prefs.lockLayout = it } },
     ))
-    AgendaSettings()
-}
-
-@Composable
-private fun AgendaSettings() {
-    val context = LocalContext.current
-    var pending by remember { mutableStateOf<String?>(null) }
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) when (pending) { "next" -> prefs.nextEvent = true; "today" -> prefs.todayCard = true }
-        pending = null
-    }
-    fun set(which: String, on: Boolean) {
-        if (on && !hasCalendar(context)) { pending = which; ask.launch(android.Manifest.permission.READ_CALENDAR); return }
-        if (which == "next") prefs.nextEvent = on else prefs.todayCard = on
-    }
-    Group("Calendar", listOf(
-        { SwitchRow("Next event under the clock", "“Standup at 9:30”", prefs.nextEvent) { set("next", it) } },
-        { SwitchRow("Today card", "Today's events on the default page", prefs.todayCard) { set("today", it) } },
-    ), Modifier.padding(top = 18.dp))
-    if (!hasCalendar(context) && (prefs.nextEvent || prefs.todayCard)) Text("Calendar access was turned off in system settings.", color = Dim, fontSize = 12.sp,
-        modifier = Modifier.padding(start = 4.dp, top = 8.dp))
 }
 
 /** Small live model of the home screen: clock, the icon grid at the chosen size and shape, search bar. */
@@ -671,6 +663,11 @@ internal fun backupJson(): String {
     return out.put("prefs", data).toString(2)
 }
 
+/** A fresh start after a restore, so no saved screen state (like the shown page) outlives the old layout. */
+private fun restart(context: Context) {
+    context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+}
+
 /** Replaces all launcher prefs with the backup's. Throws on a file that isn't one of ours. */
 internal fun restoreJson(json: String) {
     val root = org.json.JSONObject(json)
@@ -689,8 +686,10 @@ internal fun restoreJson(json: String) {
 }
 
 @Composable
-private fun BackupSettings() {
+private fun BackupSettings(apps: Apps) {
     val context = LocalContext.current
+    var nova by remember { mutableStateOf<android.net.Uri?>(null) }
+    val openNova = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { nova = it }
     var last by remember { mutableStateOf(prefs.sp.getLong("lastBackup", 0L)) }
     var restoring by remember { mutableStateOf<String?>(null) }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -715,9 +714,29 @@ private fun BackupSettings() {
             } },
             { ValueRow("Restore from a file", "", Muted) { open.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) } },
         ))
+        Group("Other launchers", listOf(
+            { ValueRow("Import from Nova Launcher", ".novabackup", Muted) { openNova.launch(arrayOf("*/*")) } },
+        ))
         Text("A backup holds your home pages, dock, drawer groups, hidden apps, custom names, gestures, all settings and calculator history. " +
             "Widgets come back on this phone; on another phone, add them again.", color = Muted, fontSize = 13.sp, lineHeight = 19.sp,
             modifier = Modifier.padding(horizontal = 4.dp))
+    }
+    nova?.let { uri ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { nova = null }, containerColor = PopupBg,
+            title = { Text("Import from Nova?", fontSize = 18.sp) },
+            text = { Text("Your home pages, dock, folders and drawer groups are replaced by Nova's, along with the settings that match. " +
+                "Widgets are added again one by one; Android may ask to allow each, and some open their own settings. The launcher restarts.", color = Muted) },
+            confirmButton = {
+                Text("Import", color = Accent, fontSize = 15.sp, modifier = Modifier.clip(CircleShape).clickable {
+                    nova = null
+                    runCatching { importNova(context, uri, apps) }
+                        .onSuccess { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show(); restart(context) }
+                        .onFailure { android.widget.Toast.makeText(context, it.message ?: "Not a Nova backup", android.widget.Toast.LENGTH_LONG).show() }
+                }.padding(12.dp))
+            },
+            dismissButton = { Text("Cancel", color = Muted, fontSize = 15.sp, modifier = Modifier.clip(CircleShape).clickable { nova = null }.padding(12.dp)) },
+        )
     }
     restoring?.let { json ->
         androidx.compose.material3.AlertDialog(
@@ -728,7 +747,7 @@ private fun BackupSettings() {
                 Text("Restore", color = Accent, fontSize = 15.sp, modifier = Modifier.clip(CircleShape).clickable {
                     restoring = null
                     runCatching { restoreJson(json) }
-                        .onSuccess { (context as android.app.Activity).recreate() }
+                        .onSuccess { restart(context) }
                         .onFailure { android.widget.Toast.makeText(context, it.message ?: "Not a backup file", android.widget.Toast.LENGTH_LONG).show() }
                 }.padding(12.dp))
             },

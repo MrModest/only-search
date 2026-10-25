@@ -42,8 +42,9 @@ class DragDrop {
         if (!grid.contains(at)) return null
         val cw = grid.width / prefs.columns
         val ch = grid.height / prefs.rows
-        // Apps land in the cell under the finger; a widget keeps its top-left corner where it was grabbed.
-        val (x, y) = if (d.w == 1 && d.h == 1) ((at.x - grid.left) / cw).toInt() to ((at.y - grid.top) / ch).toInt()
+        // Apps and folders land centred under the finger; a widget keeps its top-left corner where it was grabbed.
+        val widget = d.key.startsWith("w:") || d.key.startsWith("b:") || d.from == "picker"
+        val (x, y) = if (!widget) ((at.x - grid.left) / cw - d.w / 2f).roundToInt() to ((at.y - grid.top) / ch - d.h / 2f).roundToInt()
         else ((at.x - d.grab.x - grid.left) / cw).roundToInt() to ((at.y - d.grab.y - grid.top) / ch).roundToInt()
         return Cell(d.key, x.coerceIn(0, prefs.columns - d.w), y.coerceIn(0, prefs.rows - d.h), d.w, d.h)
     }

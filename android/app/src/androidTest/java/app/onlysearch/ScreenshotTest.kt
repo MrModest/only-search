@@ -172,11 +172,11 @@ class ScreenshotTest {
         }
         goHome()
 
-        // Long-press beside the clock opens the home menu.
+        // Long-press on an empty cell (the middle right of the grid) opens the home menu.
         val homeMenu = { item: String ->
             compose.waitUntil(30_000) {
                 if (compose.onAllNodesWithText(item).fetchSemanticsNodes().isEmpty()) {
-                    runCatching { compose.onNodeWithTag("home").performTouchInput { longClick(Offset(width * 0.85f, height * 0.2f)) } }; false
+                    runCatching { compose.onNodeWithTag("home").performTouchInput { longClick(Offset(width * 0.85f, height * 0.5f)) } }; false
                 } else true
             }
             compose.onNodeWithText(item).performClick()

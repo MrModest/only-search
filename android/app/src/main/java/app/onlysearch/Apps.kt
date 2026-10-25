@@ -42,14 +42,19 @@ class LaunchSource(private val view: View, val bounds: Rect) {
         ActivityOptions.makeScaleUpAnimation(view, bounds.left, bounds.top, bounds.width(), bounds.height()).toBundle()
 }
 
-/** Something on a home page grid: an app key, or "w:<id>" for a widget. Position and size are in cells. */
+/** Something on a home page grid: an app key, "w:<id>" for a widget, or "b:<kind>:<n>" for a built-in widget. Position and size are in cells. */
 data class Cell(val key: String, val x: Int, val y: Int, val w: Int = 1, val h: Int = 1) {
     val widgetId get() = if (key.startsWith("w:")) key.substring(2).toIntOrNull() else null
+    val builtin get() = if (key.startsWith("b:")) key.split(":")[1] else null
+    val isWidget get() = widgetId != null || builtin != null
 }
 
 /** One home screen page. [id] only lives in memory, so moved pages keep their composables. */
 data class HomePage(val items: List<Cell> = emptyList(), val id: Long = nextPageId++)
 private var nextPageId = 0L
+
+/** A home folder ("f:<n>" on the grid): a name and its app keys, in order. */
+data class Folder(val name: String, val apps: List<String>)
 
 /** A drawer tab: a named set of app keys. */
 data class AppGroup(val name: String, val apps: List<String>)
@@ -84,6 +89,10 @@ class Apps(private val context: Context) {
             arr.getJSONObject(i).run { val a = getJSONArray("apps"); AppGroup(getString("name"), (0 until a.length()).map(a::getString)) }
         })
     }
+    val folders = mutableStateMapOf<String, Folder>().apply {
+        val o = JSONObject(sp.getString("folders", "{}")!!)
+        o.keys().forEach { k -> o.getJSONObject(k).run { val a = getJSONArray("apps"); put(k, Folder(getString("name"), (0 until a.length()).map(a::getString))) } }
+    }
     private val counts = mutableStateMapOf<String, Int>()
     val loaded = mutableStateOf(false)
 
@@ -107,6 +116,7 @@ class Apps(private val context: Context) {
         sp.all.forEach { (k, v) -> if (k.startsWith("count:") && v is Int) counts[k.removePrefix("count:")] = v }
         all.clear(); all.addAll(apps.map { it.first })
         if (dock.isEmpty() && pages.all { it.items.isEmpty() } && !sp.getBoolean("seeded", false)) seedDefaults()
+        if (!sp.getBoolean("builtins", false)) migrateBuiltins()
         loaded.value = true
     }
 
@@ -131,7 +141,7 @@ class Apps(private val context: Context) {
         if (!list.remove(app.key) && list.size < max) list.add(app.key)
         sp.edit { putString(name, list.joinToString("\n")) }
     }
-    fun onHome(app: App) = pages.any { p -> p.items.any { it.key == app.key } }
+    fun onHome(app: App) = pages.any { p -> p.items.any { it.key == app.key } } || folders.values.any { app.key in it.apps }
 
     /** True if a w×h block fits at (x, y) on [page] without overlapping anything except [ignore]. */
     fun fits(page: Int, x: Int, y: Int, w: Int, h: Int, ignore: String? = null): Boolean {
@@ -181,6 +191,32 @@ class Apps(private val context: Context) {
         val cw = w.coerceAtMost(prefs.columns); val ch = h.coerceAtMost(prefs.rows)
         val (x, y) = freeSpot(p, cw, ch, fromBottom = false) ?: return false
         return place(p, Cell("w:$id", x, y, cw, ch))
+    }
+
+    /** Adds a built-in widget at [spot] (page, cell), or at the first free spot on the current page. */
+    fun addBuiltin(kind: String, spot: Pair<Int, Cell>? = null): Boolean {
+        val key = "b:$kind:${System.currentTimeMillis()}"
+        if (spot != null) return place(spot.first, spot.second.copy(key = key))
+        val (w, h) = Builtins.first { it.kind == kind }.size()
+        val p = currentPage.coerceIn(pages.indices)
+        val (x, y) = freeSpot(p, w, h, fromBottom = false) ?: return false
+        return place(p, Cell(key, x, y, w, h))
+    }
+
+    // The clock, next-event line and Today card used to sit above the grid; they become built-in widgets at the top of each page.
+    private fun migrateBuiltins() {
+        val cols = prefs.columns
+        val shifts = pages.indices.map { p ->
+            val add = listOfNotNull("clock" to 2, ("event" to 1).takeIf { prefs.nextEvent }, ("today" to 2).takeIf { prefs.todayCard && p == defaultPage })
+            var y = 0
+            val cells = add.map { (kind, h) -> Cell("b:$kind:$p", 0, y, cols, h).also { y += h } }
+            pages[p] = pages[p].copy(items = cells + pages[p].items.map { it.copy(y = it.y + y) })
+            y
+        }
+        prefs.rows = (prefs.rows + shifts.max()).coerceAtMost(MaxRows)
+        fitGrid()
+        savePages()
+        sp.edit { putBoolean("builtins", true) }
     }
 
     fun pruneWidgets(valid: (Int) -> Boolean) {
@@ -271,8 +307,8 @@ class Apps(private val context: Context) {
     /** [place], or for an app dropped on another app: the two swap cells. */
     fun moveTo(page: Int, target: Cell): Boolean {
         if (place(page, target)) return true
-        if (target.w != 1 || target.h != 1) return false
-        val other = pages[page].items.firstOrNull { it.x == target.x && it.y == target.y && it.w == 1 && it.h == 1 } ?: return false
+        if (target.key.startsWith("w:") || target.key.startsWith("b:")) return false
+        val other = pages[page].items.firstOrNull { it.x == target.x && it.y == target.y && it.w == target.w && it.h == target.h && !it.isWidget } ?: return false
         val fromPage = pages.indexOfFirst { p -> p.items.any { it.key == target.key } }
         if (fromPage < 0) return false
         val from = pages[fromPage].items.first { it.key == target.key }
@@ -282,6 +318,47 @@ class Apps(private val context: Context) {
         savePages()
         return true
     }
+
+    private fun saveFolders() = sp.edit {
+        putString("folders", JSONObject().apply { folders.forEach { (k, f) -> put(k, JSONObject().put("name", f.name).put("apps", JSONArray(f.apps))) } }.toString())
+    }
+
+    fun newFolderKey() = "f:${System.currentTimeMillis()}"
+
+    fun saveFolder(key: String, folder: Folder) { folders[key] = folder; saveFolders() }
+
+    fun renameFolder(key: String, name: String) { folders[key]?.let { saveFolder(key, it.copy(name = name)) } }
+
+    /** [app] dropped on [over] (an app or a folder at a 1×1 cell): joins the folder, or both become a new folder in that cell. */
+    fun dropOnto(page: Int, over: Cell, app: String) {
+        if (over.key == app) return
+        if (over.key.startsWith("f:")) {
+            val f = folders[over.key] ?: return
+            saveFolder(over.key, f.copy(apps = f.apps - app + app))
+            dropItem(app); if (dock.remove(app)) saveDock()
+            savePages(); return
+        }
+        val key = newFolderKey()
+        saveFolder(key, Folder("Folder", listOf(over.key, app)))
+        dropItem(app); dropItem(over.key); if (dock.remove(app)) saveDock()
+        pages[page] = pages[page].copy(items = pages[page].items + over.copy(key = key))
+        savePages()
+    }
+
+    /** Takes [app] out of a folder. A folder left with one app turns back into that app; an empty one goes away. */
+    fun takeFromFolder(key: String, app: String) {
+        val f = folders[key] ?: return
+        val rest = f.apps - app
+        if (rest.size > 1) return saveFolder(key, f.copy(apps = rest))
+        folders.remove(key); saveFolders()
+        val p = pages.indexOfFirst { pg -> pg.items.any { it.key == key } }
+        if (p < 0) return
+        val cell = pages[p].items.first { it.key == key }
+        pages[p] = pages[p].copy(items = pages[p].items.filter { it.key != key } + listOfNotNull(rest.firstOrNull()?.let { cell.copy(key = it) }))
+        savePages()
+    }
+
+    fun removeFolder(key: String) { folders.remove(key); saveFolders(); removeItem(key) }
 
     fun hide(app: App, hide: Boolean) {
         hidden.remove(app.key); if (hide) hidden.add(app.key)

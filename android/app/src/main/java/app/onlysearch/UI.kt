@@ -170,6 +170,8 @@ internal val Tile = Color(0xFF1E2025)
 internal val TileLine = Color(0xFF30333A)
 internal val FieldBg = Color(0xFF1A1C21)
 internal val Card = Color(0xFF16181C)
+/** Widgets are near-square; only the search bar is round. */
+internal val WidgetCorner = 6.dp
 internal val CardLine = Color(0xFF26292F)
 internal val Divider = Color(0xFF23262C)
 internal val PillLine = Color(0xFF34373E)
@@ -343,18 +345,34 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
         val page = pager.currentPage
         val grid = apps.pages.getOrNull(page)?.let { dnd.grids[it.id] }
         val target = grid?.let { dnd.target(d, at, it) }
+        // An app dragged out of a folder leaves the folder once it lands somewhere.
+        val folder = d.from.removePrefix("folder:").takeIf { d.from.startsWith("folder:") }
+        val leaveFolder = { folder?.let { apps.takeFromFolder(it, d.key) } }
         when {
+            folder != null && dnd.remove.contains(at) -> leaveFolder()
             (d.from == "grid" || d.from == "dock") && dnd.remove.contains(at) -> {
                 d.key.removePrefix("w:").toIntOrNull()?.takeIf { d.key.startsWith("w:") }?.let(widgets::remove)
-                apps.removeItem(d.key)
+                if (d.key.startsWith("f:")) apps.removeFolder(d.key) else apps.removeItem(d.key)
                 if (apps.dock.remove(d.key)) apps.saveDock()
             }
             d.from == "picker" -> if (target != null && apps.fits(page, target.x, target.y, target.w, target.h)) {
-                widgets.providers().firstOrNull { pickerKey(it) == d.key }?.let { apps.widgetSpot = page to target; apps.currentPage = page; widgets.add(it) }
+                if (d.key.startsWith("pb:")) apps.addBuiltin(d.key.removePrefix("pb:"), page to target)
+                else widgets.providers().firstOrNull { pickerKey(it) == d.key }?.let { apps.widgetSpot = page to target; apps.currentPage = page; widgets.add(it) }
             }
-            apps.byKey(d.key) != null && dnd.dock.contains(at) ->
+            apps.byKey(d.key) != null && dnd.dock.contains(at) -> {
                 apps.dropOnDock(d.key, ((at.x - dnd.dock.left) / (dnd.dock.width / prefs.dockSize)).toInt())
-            target != null -> if (apps.moveTo(page, target) && d.from == "dock") apps.dock.remove(d.key).also { apps.saveDock() }
+                leaveFolder()
+            }
+            target != null -> {
+                // An app dropped on an app makes a folder; on a folder, it joins it.
+                val over = apps.pages[page].items.firstOrNull { it.x == target.x && it.y == target.y && it.w == target.w && it.h == target.h && it.key != d.key && !it.isWidget }
+                if (apps.byKey(d.key) != null && over != null && over.key != folder && (over.key.startsWith("f:") || apps.byKey(over.key) != null)) {
+                    apps.dropOnto(page, over, d.key); leaveFolder()
+                } else if (apps.moveTo(page, target)) {
+                    if (d.from == "dock") apps.dock.remove(d.key).also { apps.saveDock() }
+                    leaveFolder()
+                }
+            }
         }
     }
     // Dragging to a screen edge flips to the neighbouring page.
@@ -423,7 +441,7 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
             ) {
                 SettingsScreen(apps, settings ?: "hub") { settings = null }
             }
-            if (dnd.item?.from.let { it == "grid" || it == "dock" }) RemoveZone(dnd)
+            if (dnd.item?.from.let { it == "grid" || it == "dock" || it?.startsWith("folder:") == true }) RemoveZone(dnd)
             DragGhost(apps, dnd)
             if (lockPrompt) LockPrompt { lockPrompt = false }
         }
@@ -464,7 +482,7 @@ private fun DragGhost(apps: Apps, dnd: DragDrop) {
         }
         else if (d.icon != null) Image(d.icon, null, Modifier.fillMaxSize().clip(iconShape(prefs.iconShape, w)))
         else if (app != null) AppIcon(apps, app, w)
-        else Box(Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).background(Accent.copy(alpha = 0.18f)).border(2.dp, Accent, RoundedCornerShape(24.dp)))
+        else Box(Modifier.fillMaxSize().clip(RoundedCornerShape(WidgetCorner)).background(Accent.copy(alpha = 0.18f)).border(2.dp, Accent, RoundedCornerShape(WidgetCorner)))
     }
 }
 
@@ -486,7 +504,6 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
     LaunchedEffect(prefs.columns, prefs.rows) { apps.fitGrid() }
     LaunchedEffect(pager.currentPage) { selected = null }
     var menuAt by remember { mutableStateOf(IntOffset.Zero) }
-    val events = rememberEvents()
     // Swipes: "Swipe up" set to the drawer follows the finger; anything else fires on release past [swipe].
     val swipe = with(LocalDensity.current) { 60.dp.toPx() }
     val travel = remember { floatArrayOf(0f) }
@@ -522,13 +539,7 @@ internal fun HomeScreen(apps: Apps, widgets: Widgets, pager: PagerState, actions
         if (prefs.searchBar == "top") pill(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 16.dp))
         HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 1, key = { apps.pages.getOrNull(it)?.id ?: -1L }) { i ->
             val page = apps.pages.getOrNull(i) ?: return@HorizontalPager
-            Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
-                Clock()
-                if (prefs.nextEvent) NextEventLine(events)
-                if (prefs.todayCard && i == apps.defaultPage) TodayCard(events, Modifier.padding(top = 18.dp))
-                Spacer(Modifier.height(24.dp))
-                HomeGrid(apps, widgets, i, page, selected, { selected = it }, Modifier.weight(1f).fillMaxWidth())
-            }
+            HomeGrid(apps, widgets, i, page, selected, { selected = it }, Modifier.fillMaxSize().padding(horizontal = 18.dp))
         }
         Column(Modifier.padding(horizontal = 18.dp)) {
             PageDots(apps.pages.size, pager.currentPage, Modifier.padding(top = 18.dp, bottom = 16.dp))
@@ -606,22 +617,24 @@ internal fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier) {
 internal fun HomeGrid(apps: Apps, widgets: Widgets, index: Int, page: HomePage, selected: String?, onSelect: (String?) -> Unit, modifier: Modifier) {
     val dnd = LocalDragDrop.current
     val haptic = LocalHapticFeedback.current
+    var calendarsFor by remember { mutableStateOf<String?>(null) }
+    calendarsFor?.let { CalendarPicker(it) { calendarsFor = null } }
     BoxWithConstraints(modifier.onGloballyPositioned { dnd.grids[page.id] = Rect(it.positionInWindow(), it.size.toSize()) }) {
         val cw = maxWidth / prefs.columns
         val ch = maxHeight / prefs.rows
         // Keep ~10dp between a label and the icon below it; small cells shrink the icon.
-        val icon = minOf(58.dp * prefs.iconSize / 100, cw - 12.dp, ch - if (prefs.labels) 34.dp else 10.dp)
+        val icon = minOf(58.dp * prefs.iconSize / 100, cw * prefs.appSpan - 12.dp, ch * prefs.appSpan - if (prefs.labels) 34.dp else 10.dp)
         val drop = dnd.item?.let { d -> dnd.grids[page.id]?.let { dnd.target(d, dnd.pos, it) }?.let { it to apps.fits(index, it.x, it.y, it.w, it.h, d.key) } }
         if (drop != null) {
             val (t, ok) = drop
-            Box(Modifier.offset(cw * t.x, ch * t.y).size(cw * t.w, ch * t.h).padding(4.dp).clip(RoundedCornerShape(20.dp))
-                .background((if (ok) Accent else Danger).copy(alpha = 0.12f)).border(2.dp, if (ok) Accent else Danger, RoundedCornerShape(20.dp)))
+            Box(Modifier.offset(cw * t.x, ch * t.y).size(cw * t.w, ch * t.h).padding(2.dp).clip(RoundedCornerShape(WidgetCorner))
+                .background((if (ok) Accent else Danger).copy(alpha = 0.12f)).border(2.dp, if (ok) Accent else Danger, RoundedCornerShape(WidgetCorner)))
         }
         page.items.forEach { c ->
             key(c.key) {
-                val id = c.widgetId
-                if (id == null) Box(Modifier.offset(cw * c.x, ch * c.y).size(cw * c.w, ch * c.h), contentAlignment = Alignment.Center) {
+                if (!c.isWidget) Box(Modifier.offset(cw * c.x, ch * c.y).size(cw * c.w, ch * c.h), contentAlignment = Alignment.Center) {
                     if (c.key.startsWith("s:")) ShortcutTile(apps, c.key, if (prefs.labels) Fg else null, icon)
+                    else if (c.key.startsWith("f:")) FolderTile(apps, c.key, if (prefs.labels) Fg else null, icon)
                     else apps.byKey(c.key)?.let { AppTile(apps, it, if (prefs.labels) Fg else null, icon, drag = "grid") }
                 } else {
                     val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
@@ -649,8 +662,10 @@ internal fun HomeGrid(apps: Apps, widgets: Widgets, index: Int, page: HomePage, 
                             },
                         contentAlignment = Alignment.Center,
                     ) {
-                        WidgetView(widgets, id, cw * c.w - 8.dp, ch * c.h - 8.dp)
-                        if (selected == c.key) WidgetFrame(apps, widgets, index, c, cw, ch) { onSelect(null) }
+                        val id = c.widgetId
+                        if (id != null) WidgetView(widgets, id, cw * c.w - 4.dp, ch * c.h - 4.dp)
+                        else BuiltinWidget(c, Modifier.size(cw * c.w - 4.dp, ch * c.h - 4.dp))
+                        if (selected == c.key) WidgetFrame(apps, widgets, index, c, cw, ch, onCalendars = { calendarsFor = c.key }) { onSelect(null) }
                     }
                 }
             }
@@ -660,13 +675,15 @@ internal fun HomeGrid(apps: Apps, widgets: Widgets, index: Int, page: HomePage, 
 
 /** Selection frame on a long-pressed widget: edge handles resize it cell by cell, × removes it. */
 @Composable
-private fun BoxScope.WidgetFrame(apps: Apps, widgets: Widgets, page: Int, cell: Cell, cw: Dp, ch: Dp, onClose: () -> Unit) {
-    val id = cell.widgetId ?: return
-    val info = remember(id) { widgets.manager.getAppWidgetInfo(id) } ?: return
+private fun BoxScope.WidgetFrame(apps: Apps, widgets: Widgets, page: Int, cell: Cell, cw: Dp, ch: Dp, onCalendars: () -> Unit, onClose: () -> Unit) {
+    val id = cell.widgetId
+    val builtin = Builtins.firstOrNull { it.kind == cell.builtin }
+    val info = id?.let { remember(it) { widgets.manager.getAppWidgetInfo(it) } }
+    if (info == null && builtin == null) return
     val density = LocalDensity.current.density
     fun minCells(px: Int, minPx: Int, cellDp: Dp) = kotlin.math.ceil(((if (minPx > 0) minPx else px) / density) / cellDp.value).toInt().coerceAtLeast(1)
-    val minW = minCells(info.minWidth, info.minResizeWidth, cw)
-    val minH = minCells(info.minHeight, info.minResizeHeight, ch)
+    val minW = builtin?.minW ?: minCells(info!!.minWidth, info.minResizeWidth, cw)
+    val minH = builtin?.minH ?: minCells(info!!.minHeight, info.minResizeHeight, ch)
     val current by rememberUpdatedState(cell)
     fun resize(dx: Int, dy: Int, dw: Int, dh: Int, start: Cell) {
         val w = start.w + dw; val h = start.h + dh
@@ -674,9 +691,9 @@ private fun BoxScope.WidgetFrame(apps: Apps, widgets: Widgets, page: Int, cell: 
         val next = start.copy(x = start.x + dx, y = start.y + dy, w = w, h = h)
         if (next != current) apps.place(page, next)
     }
-    Box(Modifier.matchParentSize().padding(2.dp).border(2.dp, Accent, RoundedCornerShape(24.dp)))
-    val horizontal = info.resizeMode and AppWidgetProviderInfo.RESIZE_HORIZONTAL != 0
-    val vertical = info.resizeMode and AppWidgetProviderInfo.RESIZE_VERTICAL != 0
+    Box(Modifier.matchParentSize().padding(1.dp).border(2.dp, Accent, RoundedCornerShape(WidgetCorner)))
+    val horizontal = info == null || info.resizeMode and AppWidgetProviderInfo.RESIZE_HORIZONTAL != 0
+    val vertical = info == null || info.resizeMode and AppWidgetProviderInfo.RESIZE_VERTICAL != 0
     @Composable
     fun Handle(align: Alignment, name: String, apply: (Float, Float, Cell) -> Unit) {
         var start by remember { mutableStateOf(cell) }
@@ -701,21 +718,28 @@ private fun BoxScope.WidgetFrame(apps: Apps, widgets: Widgets, page: Int, cell: 
     }
     Box(
         Modifier.align(Alignment.TopEnd).padding(6.dp).size(30.dp).clip(CircleShape).background(PopupBg).border(1.dp, PillLine, CircleShape)
-            .clickable { widgets.remove(id); apps.removeItem(cell.key); onClose() }.semantics { contentDescription = "Remove widget" },
+            .clickable { id?.let(widgets::remove); apps.removeItem(cell.key); onClose() }.semantics { contentDescription = "Remove widget" },
         contentAlignment = Alignment.Center,
     ) { Icon(Ic.close, null, tint = Danger, modifier = Modifier.size(14.dp)) }
+    if (info?.configure != null || builtin?.agenda == true) Box(
+        Modifier.align(Alignment.TopStart).padding(6.dp).size(30.dp).clip(CircleShape).background(PopupBg).border(1.dp, PillLine, CircleShape)
+            .clickable { if (id != null) widgets.reconfigure(id) else onCalendars(); onClose() }.semantics { contentDescription = "Widget settings" },
+        contentAlignment = Alignment.Center,
+    ) { Icon(EIc.settings, null, tint = Fg, modifier = Modifier.size(15.dp)) }
 }
 
 @Composable
-internal fun Clock() {
+internal fun Clock(modifier: Modifier = Modifier) = BoxWithConstraints(modifier) {
     val context = LocalContext.current
     val now by produceState(Date()) { while (true) { value = Date(); delay(60_000 - System.currentTimeMillis() % 60_000) } }
-    Column(Modifier.padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    // 92sp when there's room, smaller in a short or narrow cell block.
+    val size = with(LocalDensity.current) { minOf(92.dp, (maxHeight - 30.dp).coerceAtLeast(16.dp), maxWidth / 2.8f).toSp() }
+    Column(Modifier.padding(horizontal = 8.dp).align(Alignment.CenterStart), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(DateFormat.format("EEE d MMM", now).toString().uppercase(), style = shadowed(), color = Muted, fontSize = 12.sp,
             fontFamily = Mono, letterSpacing = 0.14.em)
         // AM/PM would not fit at this size; the status bar already shows it.
         Text(DateFormat.format(if (DateFormat.is24HourFormat(context)) "H:mm" else "h:mm", now).toString(), style = shadowed(),
-            fontSize = 92.sp, fontWeight = FontWeight.Light, letterSpacing = (-0.045).em, lineHeight = 92.sp)
+            fontSize = size, fontWeight = FontWeight.Light, letterSpacing = (-0.045).em, lineHeight = size)
     }
 }
 
@@ -730,8 +754,8 @@ internal fun WidgetView(widgets: Widgets, id: Int, width: Dp, height: Dp) {
         else @Suppress("DEPRECATION") v.updateAppWidgetSize(null, width.value.toInt(), height.value.toInt(), width.value.toInt(), height.value.toInt())
     }
     AndroidView(
-        factory = { ctx -> widgets.host.createView(ctx, id, info).apply { setAppWidget(id, info); view = this } },
-        modifier = Modifier.size(width, height).clip(RoundedCornerShape(24.dp)),
+        factory = { ctx -> widgets.host.createView(ctx, id, info).apply { setAppWidget(id, info); setPadding(0, 0, 0, 0); view = this } },
+        modifier = Modifier.size(width, height).clip(RoundedCornerShape(WidgetCorner)),
     )
 }
 
@@ -792,6 +816,22 @@ internal fun WidgetPicker(apps: Apps, widgets: Widgets, only: String?, onClose: 
                 Field(filter, { filter = it }, "Search widgets", Modifier.weight(1f), autoFocus = false, fontSize = 15) {}
             }
             LazyColumn(Modifier.weight(1f).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                val ours = Builtins.filter { only == null && (filter.isBlank() || it.label.contains(filter, true) || "only search".contains(filter, true)) }
+                if (ours.isNotEmpty()) {
+                    item(key = "builtin") {
+                        Text("Only Search", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.heightIn(min = 40.dp).wrapContentHeight())
+                    }
+                    items(ours, key = { "b:" + it.kind }) { b ->
+                        val (w, h) = b.size()
+                        WidgetPreview(apps, "pb:${b.kind}", b.label, w, h, null, Modifier, onDragging = { dragging = true }, onDropped = onClose,
+                            onClick = {
+                                if (!apps.addBuiltin(b.kind)) Toast.makeText(context, "No room for this widget on the page", Toast.LENGTH_SHORT).show()
+                                onClose()
+                            }) {
+                            BuiltinWidget(Cell("b:${b.kind}:preview", 0, 0, w, h), Modifier.fillMaxSize(), preview = true)
+                        }
+                    }
+                }
                 shown.forEach { (pkg, label, list) ->
                     val expanded = open == pkg || filter.isNotBlank()
                     item(key = pkg) {
@@ -837,17 +877,28 @@ internal fun cells(p: AppWidgetProviderInfo, density: Float): Pair<Int, Int> {
 internal fun WidgetPreview(apps: Apps, p: AppWidgetProviderInfo, modifier: Modifier, onDragging: () -> Unit, onDropped: () -> Unit, onClick: () -> Unit) {
     val context = LocalContext.current
     val density = context.resources.displayMetrics
-    val dnd = LocalDragDrop.current
-    val haptic = LocalHapticFeedback.current
     val preview = remember(p) {
         runCatching { (p.loadPreviewImage(context, density.densityDpi) ?: p.loadIcon(context, density.densityDpi))?.toBitmap()?.asImageBitmap() }.getOrNull()
     }
     val (w, h) = cells(p, density.density)
+    WidgetPreview(apps, pickerKey(p), p.loadLabel(context.packageManager), w, h, preview, modifier, onDragging, onDropped, onClick) {
+        if (preview != null) Image(preview, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+    }
+}
+
+/** A picker card: tap adds the widget, hold and drag places it. [key] is what the drop handler gets. */
+@Composable
+internal fun WidgetPreview(
+    apps: Apps, key: String, label: String, w: Int, h: Int, preview: ImageBitmap?, modifier: Modifier,
+    onDragging: () -> Unit, onDropped: () -> Unit, onClick: () -> Unit, sample: @Composable () -> Unit,
+) {
+    val dnd = LocalDragDrop.current
+    val haptic = LocalHapticFeedback.current
     val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
     Column(
         modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Sheet).onGloballyPositioned { coords[0] = it }
             .semantics { onClick { onClick(); true } }
-            .pointerInput(p) {
+            .pointerInput(key) {
                 tapHoldDrag(
                     { coords[0] }, onTap = onClick, onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
                     onDragStart = { _, at ->
@@ -856,7 +907,7 @@ internal fun WidgetPreview(apps: Apps, p: AppWidgetProviderInfo, modifier: Modif
                         val cw = w.coerceAtMost(prefs.columns); val ch = h.coerceAtMost(prefs.rows)
                         val size = Size(grid.width / prefs.columns * cw, grid.height / prefs.rows * ch)
                         onDragging()
-                        dnd.start(Dragged(pickerKey(p), cw, ch, "picker", Offset(size.width / 2, size.height / 2), size, preview), at)
+                        dnd.start(Dragged(key, cw, ch, "picker", Offset(size.width / 2, size.height / 2), size, preview), at)
                     },
                     onDrag = dnd::move, onDragEnd = { dnd.end(); onDropped() },
                 )
@@ -868,9 +919,9 @@ internal fun WidgetPreview(apps: Apps, p: AppWidgetProviderInfo, modifier: Modif
             Modifier.fillMaxWidth().height(96.dp).clip(RoundedCornerShape(16.dp)).background(FieldBg)
                 .border(1.dp, Color(0xFF2A2D33), RoundedCornerShape(16.dp)).padding(8.dp),
             contentAlignment = Alignment.Center,
-        ) { if (preview != null) Image(preview, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+        ) { sample() }
         Row(Modifier.fillMaxWidth()) {
-            Text(p.loadLabel(context.packageManager), color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(label, color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text("$w × $h", color = Muted, fontSize = 12.sp, fontFamily = Mono)
         }
     }
@@ -929,7 +980,7 @@ internal fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifie
                         onDragStart = if (!canDrag) null else { _, at ->
                             menu = false
                             val px = size.toPx()
-                            dnd.start(Dragged(app.key, 1, 1, drag!!, Offset(px / 2, px / 2), Size(px, px)), at)
+                            dnd.start(Dragged(app.key, prefs.appSpan, prefs.appSpan, drag!!, Offset(px / 2, px / 2), Size(px, px)), at)
                         },
                         onDrag = dnd::move, onDragEnd = dnd::end,
                     )
@@ -963,7 +1014,7 @@ internal fun ShortcutTile(apps: Apps, key: String, labelColor: Color?, size: Dp)
                     onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
                     onDragStart = if (prefs.lockLayout) null else { _, at ->
                         val px = size.toPx()
-                        dnd.start(Dragged(key, 1, 1, "grid", Offset(px / 2, px / 2), Size(px, px), icon), at)
+                        dnd.start(Dragged(key, prefs.appSpan, prefs.appSpan, "grid", Offset(px / 2, px / 2), Size(px, px), icon), at)
                     },
                     onDrag = dnd::move, onDragEnd = dnd::end,
                 )
@@ -1002,7 +1053,7 @@ internal fun AppIcon(apps: Apps, app: App, size: Dp, modifier: Modifier = Modifi
     else if (bmp != null) Image(bmp, app.label, m) else Box(m.background(Tile).border(1.dp, TileLine, shape))
 }
 
-private object FullScreen : PopupPositionProvider {
+internal object FullScreen : PopupPositionProvider {
     override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize) = IntOffset.Zero
 }
 
@@ -1114,7 +1165,7 @@ private fun ShortcutRow(apps: Apps, s: Shortcut, icon: ImageBitmap?, onDragging:
                         if (!dragging && !prefs.lockLayout && (c.position - down.position).getDistance() > viewConfiguration.touchSlop) {
                             dragging = true; onDragging(true)
                             val px = (58.dp * prefs.iconSize / 100).toPx()
-                            dnd.start(Dragged(apps.shortcutKey(s), 1, 1, "popup", Offset(px / 2, px / 2), Size(px, px), icon), at)
+                            dnd.start(Dragged(apps.shortcutKey(s), prefs.appSpan, prefs.appSpan, "popup", Offset(px / 2, px / 2), Size(px, px), icon), at)
                         }
                         if (dragging) { c.consume(); dnd.move(at) }
                     }

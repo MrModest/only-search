@@ -8,3 +8,7 @@ bridge/soulver/
 android/app/src/main/jniLibs/
 android/app/src/main/assets/soulver/
 .serena/
+
+# Personal launcher backups
+*.novabackup
+.DS_Store

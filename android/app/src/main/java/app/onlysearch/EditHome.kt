@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.sp
 import java.util.Date
 import kotlinx.coroutines.launch
 
-private object EIc {
+internal object EIc {
     val wallpaper = line("M4 4h16v16H4z M4 16l5-5 5 5 2-2 4 4 M15 8.5h.01")
     val widgets = line("M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z")
     val layout = line("M4 4h16v16H4z M4 9.3h16 M4 14.6h16 M9.3 4v16 M14.6 4v16")
@@ -163,7 +163,7 @@ private fun AddPageCard(onClick: () -> Unit) {
     ) { Icon(EIc.plus, null, tint = Muted, modifier = Modifier.size(28.dp)) }
 }
 
-/** A page drawn small: clock, widget placeholders and real app icons at their cells. */
+/** A page drawn small: widget placeholders and real app icons at their cells. */
 @Composable
 private fun PagePreview(apps: Apps, page: HomePage, current: Boolean, modifier: Modifier) {
     val shape = RoundedCornerShape(30.dp)
@@ -171,16 +171,15 @@ private fun PagePreview(apps: Apps, page: HomePage, current: Boolean, modifier: 
         modifier.fillMaxSize().clip(shape).background(Sheet).border(if (current) 2.dp else 1.dp, if (current) Accent else Color(0xFF2A2D33), shape)
             .padding(start = 14.dp, end = 14.dp, top = 22.dp, bottom = 14.dp)
     ) {
-        Text(DateFormat.format("EEE d MMM", Date()).toString().uppercase(), color = Muted, fontSize = 8.sp, fontFamily = Mono)
-        Text(DateFormat.format("h:mm", Date()).toString(), fontSize = 52.sp, fontWeight = FontWeight.Light, lineHeight = 56.sp)
-        Spacer(Modifier.height(10.dp))
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val cw = maxWidth / prefs.columns
             val ch = maxHeight / prefs.rows
             val icon = minOf(cw, ch) * 0.62f
             page.items.forEach { c ->
                 Box(Modifier.offset(cw * c.x, ch * c.y).size(cw * c.w, ch * c.h).padding(3.dp), contentAlignment = Alignment.Center) {
-                    if (c.widgetId != null) Column(
+                    if (c.builtin == "clock") Text(DateFormat.format("h:mm", Date()).toString(), fontSize = 40.sp, fontWeight = FontWeight.Light,
+                        lineHeight = 44.sp, modifier = Modifier.fillMaxWidth())
+                    else if (c.isWidget) Column(
                         Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(Card).border(1.dp, CardLine, RoundedCornerShape(14.dp)).padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(7.dp),
                     ) {
@@ -188,7 +187,7 @@ private fun PagePreview(apps: Apps, page: HomePage, current: Boolean, modifier: 
                         Box(Modifier.fillMaxWidth(0.9f).height(3.dp).clip(CircleShape).background(Color(0xFF3A3D45)))
                         Box(Modifier.fillMaxWidth(0.7f).height(3.dp).clip(CircleShape).background(Color(0xFF3A3D45)))
                     } else {
-                        val bmp = apps.byKey(c.key)?.let { apps.icons[it.key] }
+                        val bmp = apps.byKey(apps.folders[c.key]?.apps?.firstOrNull() ?: c.key)?.let { apps.icons[it.key] }
                         val s = iconShape(prefs.iconShape, icon)
                         if (bmp != null) Image(bmp, null, Modifier.size(icon).clip(s)) else Box(Modifier.size(icon).clip(s).background(Tile))
                     }

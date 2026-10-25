@@ -17,6 +17,21 @@ Each item is checked only after a UI test on the emulator.
 - [x] 12. Next calendar event under the clock + Today card
 - [x] 13. Settings · Backup & restore (JSON file)
 
+## Next (user requests, 2026-10-25)
+
+- [x] 14. Calendar widget settings: choose which calendars it shows
+- [x] 15. Built-in home widgets become normal widgets, added from the widget menu
+- [x] 16. Long-press a widget: "Widget settings" (reconfigure) like Nova
+- [x] 17. Smaller widget padding, so the widget gets the space
+- [x] 18. Near-square widget corners (only the search bar stays round)
+- [x] 19. Home folders (needed for the Nova import)
+- [x] 20. Import from Nova Launcher (.novabackup via file picker): pages, icons, widgets, folders, dock, drawer groups, hidden apps, matching settings. Half-cell layouts import on a doubled grid (5×7 → 10×14). Test file: docs/2026-10-25_07-41.novabackup
+
+Decisions: the clock, next-event line and Today card all become built-in widgets in the picker.
+
 Notes:
 - Crypto: SoulverCore never asks the rate provider about crypto, so the bridge registers crypto as custom units priced in USD (BTC, ETH, SOL, XRP, DOGE, ADA, LTC, USDT, BNB, DOT).
-- Weather is left out on purpose; the line under the clock shows the next calendar event (opt-in).
+- Weather is left out on purpose; the "Next event" built-in widget shows the next calendar event.
+- Built-in widgets are grid cells keyed "b:<kind>:<n>" (clock, event, today); an upgrade moves the old clock/agenda rows into the grid and adds rows for them.
+- Home folders are cells keyed "f:<n>", stored in the "folders" pref. Dropping an app on an app makes a folder (this replaced swapping).
+- Nova import: the backup's widgets are queued in "novaWidgets" and bound one by one after the restart. Apps take `set.appSpan` cells (2 on a doubled grid).

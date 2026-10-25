@@ -50,6 +50,10 @@ class MainActivity : ComponentActivity() {
             }
         }
         apps.pruneWidgets { widgets.manager.getAppWidgetInfo(it) != null }
+        // Ids no page uses any more (a restore or Nova import replaced the layout) are released.
+        val used = apps.pages.flatMap { p -> p.items.mapNotNull { it.widgetId } }.toSet()
+        widgets.host.appWidgetIds.filter { it !in used }.forEach(widgets::remove)
+        bindNovaWidgets(this, apps, widgets)
         lifecycleScope.launch { apps.load() }
         lifecycleScope.launch {
             Soulver.init(applicationContext)
