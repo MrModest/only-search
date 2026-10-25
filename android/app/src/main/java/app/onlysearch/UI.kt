@@ -762,11 +762,15 @@ internal fun Clock(modifier: Modifier = Modifier) = BoxWithConstraints(modifier)
 internal fun WidgetView(widgets: Widgets, id: Int, width: Dp, height: Dp) {
     val info = remember(id) { widgets.manager.getAppWidgetInfo(id) } ?: return
     var view by remember { mutableStateOf<AppWidgetHostView?>(null) }
-    // Tell the widget how big it really is, so it can pick a layout that fits.
+    // Tell the widget how big it is, the way Launcher3 (and Nova) do: portrait as it is, plus landscape, wider and
+    // shorter. Widgets that size themselves by the max width then show as much as they would there.
     LaunchedEffect(view, width, height) {
         val v = view ?: return@LaunchedEffect
-        if (Build.VERSION.SDK_INT >= 31) v.updateAppWidgetSize(Bundle(), listOf(SizeF(width.value, height.value)))
-        else @Suppress("DEPRECATION") v.updateAppWidgetSize(null, width.value.toInt(), height.value.toInt(), width.value.toInt(), height.value.toInt())
+        val dm = v.resources.displayMetrics
+        val ratio = maxOf(dm.heightPixels, dm.widthPixels) / minOf(dm.heightPixels, dm.widthPixels).toFloat()
+        val (w, h) = width.value to height.value
+        if (Build.VERSION.SDK_INT >= 31) v.updateAppWidgetSize(Bundle(), listOf(SizeF(w, h), SizeF(w * ratio, h / ratio)))
+        else @Suppress("DEPRECATION") v.updateAppWidgetSize(null, w.toInt(), (h / ratio).toInt(), (w * ratio).toInt(), h.toInt())
     }
     AndroidView(
         factory = { ctx -> widgets.host.createView(ctx, id, info).apply { setAppWidget(id, info); setPadding(0, 0, 0, 0); view = this } },
