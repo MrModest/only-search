@@ -13,7 +13,9 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
@@ -22,6 +24,8 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -65,6 +69,10 @@ class ScreenshotTest {
             .putString("dock", listOf("Phone", "Messages", "Chrome", "Camera").mapNotNull(keys::get).joinToString("\n"))
             .putBoolean("seeded", true)
             .putString("home", listOf("Calendar", "Maps", "Photos", "Gmail", "Clock", "Drive", "Files", "Contacts").mapNotNull(keys::get).joinToString("\n"))
+            .putString("groups", JSONArray(listOf(
+                "Work" to listOf("Gmail", "Calendar", "Drive", "Files", "Contacts"),
+                "Media" to listOf("Photos", "Camera", "YouTube", "YouTube Music"),
+            ).map { (name, labels) -> JSONObject().put("name", name).put("apps", JSONArray(labels.mapNotNull(keys::get))) }).toString())
             .apply { listOf("Chrome" to 12, "Messages" to 9, "Maps" to 7, "Camera" to 5, "Gmail" to 4).forEach { (l, n) -> keys[l]?.let { putInt("count:$it", n) } } }
             .putString("history", listOf(
                 "9:35am in New York to Japan\t10:35 PM",
@@ -94,6 +102,9 @@ class ScreenshotTest {
         runCatching { compose.onNodeWithTag("home").performTouchInput { moveTo(Offset(centerX, height * 0.25f)); up() } }
             .onFailure { compose.onNodeWithTag("home").performTouchInput { swipeUp(startY = height * 0.8f, endY = height * 0.2f, durationMillis = 400) } }
         shot("03-drawer", 1500)
+        compose.onNodeWithText("Work").performClick()
+        shot("03a-drawer-group")
+        compose.onNodeWithText("All").performClick()
 
         compose.onNodeWithTag("scrubber").performTouchInput { down(Offset(centerX, height * 0.5f)); moveTo(Offset(centerX, height * 0.55f)) }
         shot("04-drawer-letter-scrubber")
@@ -151,6 +162,31 @@ class ScreenshotTest {
             softWait { compose.onAllNodes(hasTestTag("calcCard")).fetchSemanticsNodes().isNotEmpty() }
             shot("%02d-%s-%s".format(20 + i, topic, expression.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')))
         }
+        goHome()
+
+        // Long-press beside the clock opens the home menu.
+        val homeMenu = { item: String ->
+            compose.onNodeWithTag("home").performTouchInput { longClick(Offset(width * 0.85f, height * 0.2f)) }
+            compose.onNodeWithText(item).performClick()
+        }
+        homeMenu("Edit home")
+        shot("40-edit-home", 1500)
+        instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+        goHome()
+        homeMenu("Add widget")
+        shot("41-widget-picker", 1500)
+        instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+        goHome()
+
+        homeMenu("Settings")
+        shot("50-settings")
+        listOf("Search & calculator", "Sources & ranking", "Home screen", "Dock & search bar", "App drawer & folders", "Gestures", "Look & feel", "Backup & restore")
+            .forEachIndexed { i, title ->
+                compose.onNodeWithText(title).performScrollTo().performClick()
+                shot("%02d-settings-%s".format(51 + i, title.lowercase().replace(Regex("[^a-z]+"), "-").trim('-')))
+                instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+                compose.waitForIdle()
+            }
         scenario.close()
     }
 }
