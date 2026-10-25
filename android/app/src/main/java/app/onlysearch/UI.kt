@@ -232,7 +232,7 @@ internal fun Label(text: String, modifier: Modifier = Modifier, color: Color = M
 internal fun shadowed() = LocalTextStyle.current.copy(shadow = TextShadow)
 
 @Composable
-fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeTick: Int, initialQuery: String?, typed: Pair<Int, String>) {
+fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: Int, resumeTick: Int, initialQuery: String?, typed: Pair<Int, String>) {
     val scope = rememberCoroutineScope()
     val activity = LocalContext.current as Activity
     val screenPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
@@ -280,9 +280,9 @@ fun Launcher(apps: Apps, widgets: Widgets, homeTick: Int, stopTick: Int, resumeT
     LaunchedEffect(typed.first) { if (typed.first > 0 && !searching) { query = typed.second; searching = true } }
 
     // Home button: animate back. Leaving to an app: reset silently so the launch animation isn't disturbed.
-    LaunchedEffect(homeTick) {
-        if (homeTick == 0) return@LaunchedEffect
-        val onHome = !searching && !picking && settings == null && !editing && drawer.value == 0f
+    LaunchedEffect(home.first) {
+        if (home.first == 0) return@LaunchedEffect
+        val onHome = home.second && !searching && !picking && settings == null && !editing && drawer.value == 0f
         closeSearch(); picking = false; settings = null; editing = false; settleDrawer(false)
         // Home pressed on home: back to the default page first, then the "Home button on home" gesture.
         if (onHome) { if (pager.currentPage != apps.defaultPage) pager.animateScrollToPage(apps.defaultPage) else run(gesture("gHome")) }

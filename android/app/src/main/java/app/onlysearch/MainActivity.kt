@@ -3,6 +3,7 @@ package app.onlysearch
 import android.content.Intent
 import android.content.pm.LauncherApps
 import android.os.Bundle
+import android.os.SystemClock
 import android.os.UserHandle
 import android.graphics.Color
 import android.widget.Toast
@@ -14,6 +15,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
@@ -21,7 +23,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var apps: Apps
     lateinit var widgets: Widgets // public for the screenshot test
         private set
-    private val homeTick = mutableIntStateOf(0)
+    /** Home intents: a count, and whether the launcher was already in front (Home pressed on home, not returning from an app). */
+    private val home = mutableStateOf(0 to false)
+    private var startedAt = 0L
     private val stopTick = mutableIntStateOf(0)
     private val resumeTick = mutableIntStateOf(0)
     private val typed = androidx.compose.runtime.mutableStateOf(0 to "")
@@ -65,17 +69,21 @@ class MainActivity : ComponentActivity() {
         val query = intent.getStringExtra("query")
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                Launcher(apps, widgets, homeTick.intValue, stopTick.intValue, resumeTick.intValue, query, typed.value)
+                Launcher(apps, widgets, home.value, stopTick.intValue, resumeTick.intValue, query, typed.value)
             }
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.hasCategory(Intent.CATEGORY_HOME)) homeTick.intValue++
+        // Like Launcher3: focused and not brought back from an app. On some devices the swipe-home animation hands focus
+        // to the launcher early, so a launcher started a moment ago doesn't count either.
+        // ponytail: 500 ms is a guess at the transition length; raise it if a home gesture still triggers the action.
+        val inFront = hasWindowFocus() && intent.flags and Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT == 0 && SystemClock.uptimeMillis() - startedAt > 500
+        if (intent.hasCategory(Intent.CATEGORY_HOME)) home.value = home.value.first + 1 to inFront
     }
 
-    override fun onStart() { super.onStart(); widgets.host.startListening() }
+    override fun onStart() { super.onStart(); startedAt = SystemClock.uptimeMillis(); widgets.host.startListening() }
     override fun onStop() { super.onStop(); runCatching { widgets.host.stopListening() }; stopTick.intValue++ }
     override fun onResume() {
         super.onResume(); resumeTick.intValue++
