@@ -111,6 +111,7 @@ class Prefs(context: Context) {
     fun setGesture(key: String, action: String) { gestureMap[key] = action; sp.edit { putString("set.$key", action) } }
     var typeToSearch by P("set.typeToSearch", true)
     var resetQuery by P("set.resetQuery", false)
+    var keepQueryMinutes by P("set.keepQueryMinutes", 5)
 
     // Dock & search bar
     var dockSize by P("set.dockSize", 4)

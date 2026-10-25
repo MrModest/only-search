@@ -125,9 +125,10 @@ internal fun GestureSettings(apps: Apps) {
                 ValueRow(title, actionLabel(apps, action), if (action == "search") Accent else Muted, GestureIcons.getValue(key)) { picking = key }
             }
         })
-        Group("Search", listOf(
+        Group("Search", listOfNotNull<@Composable () -> Unit>(
             { SwitchRow("Type anywhere to search", "With a hardware keyboard attached", prefs.typeToSearch) { prefs.typeToSearch = it } },
-            { SwitchRow("Reset query on close", "Off keeps your last calculation", prefs.resetQuery) { prefs.resetQuery = it } },
+            { SwitchRow("Reset query on close", "Off keeps your last calculation for a while", prefs.resetQuery) { prefs.resetQuery = it } },
+            if (prefs.resetQuery) null else { { Stepper("Keep it for (minutes)", prefs.keepQueryMinutes, 1..120) { prefs.keepQueryMinutes = it } } },
         ))
         if (LockService.instance == null && Gestures.any { gesture(it.first) == "lock" }) Text(
             "Lock screen needs the accessibility service; you'll be asked the first time you use it.",

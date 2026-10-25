@@ -266,6 +266,8 @@ fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: I
     fun dragDrawer(deltaPx: Float) = scope.launch { drawer.snapTo((drawer.value - deltaPx / screenPx).coerceIn(0f, 1f)) }
     val drawerOpening by remember { derivedStateOf { drawer.targetValue > 0f } }
     fun closeSearch() { searching = false; if (prefs.resetQuery) query = "" }
+    // A kept query is forgotten once search has stayed closed for the chosen time.
+    LaunchedEffect(searching) { if (!searching && query.isNotEmpty()) { delay(prefs.keepQueryMinutes * 60_000L); query = "" } }
     var lockPrompt by remember { mutableStateOf(false) }
     fun run(action: String) {
         when {
