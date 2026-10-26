@@ -27,7 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -319,10 +324,11 @@ internal fun Group(title: String?, rows: List<@Composable () -> Unit>, modifier:
 }
 
 @Composable
-internal fun Switch(checked: Boolean, label: String, onChange: (Boolean) -> Unit) {
+internal fun Switch(checked: Boolean, label: String, onChange: ((Boolean) -> Unit)?) {
     Box(
         Modifier.size(48.dp, 28.dp).clip(CircleShape).background(if (checked) Accent else Color(0xFF3A3D45))
-            .clickable { onChange(!checked) }.padding(3.dp),
+            .then(if (onChange == null) Modifier else Modifier.toggleable(checked, role = Role.Switch, onValueChange = onChange).semantics { contentDescription = label })
+            .padding(3.dp),
         contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
     ) { Box(Modifier.size(22.dp).clip(CircleShape).background(if (checked) OnAccent else Muted)) }
 }
@@ -330,14 +336,14 @@ internal fun Switch(checked: Boolean, label: String, onChange: (Boolean) -> Unit
 @Composable
 internal fun SwitchRow(title: String, subtitle: String?, checked: Boolean, monoSubtitle: Boolean = false, onChange: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { onChange(!checked) }.padding(start = 14.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(start = 14.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, fontSize = 15.sp, lineHeight = 18.sp)
             if (subtitle != null) Text(subtitle, color = Muted, fontSize = if (monoSubtitle) 11.sp else 12.sp, lineHeight = 15.sp, fontFamily = if (monoSubtitle) Mono else Sans)
         }
-        Switch(checked, title, onChange)
+        Switch(checked, title, null)
     }
 }
 
@@ -370,7 +376,7 @@ private fun HomeSettings() {
                     Text("Icon size", fontSize = 15.sp, modifier = Modifier.weight(1f))
                     Text("${prefs.iconSize}%", color = Accent, fontSize = 13.sp, fontFamily = Mono)
                 }
-                ThinSlider(prefs.iconSize, 70..130, 5) { prefs.iconSize = it }
+                ThinSlider("Icon size", prefs.iconSize, 70..130, 5) { prefs.iconSize = it }
             }
         },
         {
@@ -446,14 +452,21 @@ private fun StepButton(text: String, label: String, enabled: Boolean, onClick: (
 
 /** Thin track with a round thumb, like the mock-up's range input. Tap or drag; snaps to [step]. */
 @Composable
-private fun ThinSlider(value: Int, range: IntRange, step: Int, onChange: (Int) -> Unit) {
+private fun ThinSlider(label: String, value: Int, range: IntRange, step: Int, onChange: (Int) -> Unit) {
     val frac = (value - range.first).toFloat() / (range.last - range.first)
-    fun pick(x: Float, width: Int) {
-        val v = range.first + ((x / width).coerceIn(0f, 1f) * (range.last - range.first) / step).roundToInt() * step
-        if (v != value) onChange(v)
+    val current by rememberUpdatedState(value)
+    fun pickFrac(f: Float) {
+        val v = range.first + (f.coerceIn(0f, 1f) * (range.last - range.first) / step).roundToInt() * step
+        if (v != current) onChange(v)
     }
+    fun pick(x: Float, width: Int) = pickFrac(x / width)
     BoxWithConstraints(
         Modifier.fillMaxWidth().height(32.dp)
+            .semantics {
+                contentDescription = label
+                progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat())
+                setProgress { t -> pickFrac((t - range.first) / (range.last - range.first)); true }
+            }
             .pointerInput(range) { detectTapGestures { pick(it.x, size.width) } }
             .pointerInput(range) { detectHorizontalDragGestures { c, _ -> pick(c.position.x, size.width) } },
         contentAlignment = Alignment.CenterStart,
@@ -698,7 +711,7 @@ private fun LookSettings(apps: Apps) {
                         }
                         Text("${prefs.dim}%", color = Accent, fontSize = 13.sp, fontFamily = Mono)
                     }
-                    ThinSlider(prefs.dim, 0..60, 5) { prefs.dim = it }
+                    ThinSlider("Dim wallpaper", prefs.dim, 0..60, 5) { prefs.dim = it }
                 }
             },
         ))
@@ -729,7 +742,7 @@ private fun AccentPicker(onClose: () -> Unit) {
             listOf(Triple("Hue", hue, 0..360), Triple("Saturation", sat, 0..100), Triple("Brightness", bri, 0..100)).forEach { (label, v, range) ->
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(label, color = Muted, fontSize = 12.sp)
-                    ThinSlider(v, range, 1) { when (label) { "Hue" -> hue = it; "Saturation" -> sat = it; else -> bri = it } }
+                    ThinSlider(label, v, range, 1) { when (label) { "Hue" -> hue = it; "Saturation" -> sat = it; else -> bri = it } }
                 }
             }
             Text("Done", color = Accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
@@ -840,7 +853,7 @@ private fun BackupSettings(apps: Apps) {
                     restoring = null
                     runCatching { restoreJson(json) }
                         .onSuccess { restart(context) }
-                        .onFailure { android.widget.Toast.makeText(context, it.message ?: "Not a backup file", android.widget.Toast.LENGTH_LONG).show() }
+                        .onFailure { android.widget.Toast.makeText(context, "Not a valid backup file", android.widget.Toast.LENGTH_LONG).show() }
                 }.padding(12.dp))
             },
             dismissButton = { Text("Cancel", color = Muted, fontSize = 15.sp, modifier = Modifier.clip(CircleShape).clickable { restoring = null }.padding(12.dp)) },
