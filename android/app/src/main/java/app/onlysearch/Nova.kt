@@ -9,6 +9,8 @@ import android.net.Uri
 import android.os.Process
 import android.util.Xml
 import androidx.core.content.edit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
@@ -24,19 +26,22 @@ import kotlin.math.roundToInt
  * and bound again on the next start ([bindNovaWidgets]).
  * Returns a one-line summary.
  */
-internal fun importNova(context: Context, uri: Uri, apps: Apps): String {
-    val dir = File(context.cacheDir, "nova").apply { deleteRecursively(); mkdirs() }
-    context.contentResolver.openInputStream(uri)!!.use { input ->
-        ZipInputStream(input).use { zip ->
-            generateSequence { zip.nextEntry }.forEach { e ->
-                val name = File(e.name).name
-                if (name == "nova.db" || name == "nova.xml") File(dir, name).outputStream().use { zip.copyTo(it) }
+internal suspend fun importNova(context: Context, uri: Uri, apps: Apps): String {
+    val dir = File(context.cacheDir, "nova")
+    val novaPrefs = withContext(Dispatchers.IO) {
+        dir.apply { deleteRecursively(); mkdirs() }
+        context.contentResolver.openInputStream(uri)!!.use { input ->
+            ZipInputStream(input).use { zip ->
+                generateSequence { zip.nextEntry }.forEach { e ->
+                    val name = File(e.name).name
+                    if (name == "nova.db" || name == "nova.xml") File(dir, name).outputStream().use { zip.copyTo(it) }
+                }
             }
         }
+        require(File(dir, "nova.db").exists()) { "Not a Nova backup" }
+        File(dir, "nova.xml").takeIf { it.exists() }?.let(::readPrefsXml).orEmpty()
     }
     val dbFile = File(dir, "nova.db")
-    require(dbFile.exists()) { "Not a Nova backup" }
-    val novaPrefs = File(dir, "nova.xml").takeIf { it.exists() }?.let(::readPrefsXml).orEmpty()
     val db = SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY)
     try {
         return db.use { importNova(context, it, novaPrefs, apps) }

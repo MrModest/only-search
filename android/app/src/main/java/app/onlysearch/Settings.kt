@@ -22,6 +22,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableStateMapOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -793,24 +795,29 @@ internal fun restoreJson(json: String) {
 @Composable
 private fun BackupSettings(apps: Apps) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var nova by remember { mutableStateOf<android.net.Uri?>(null) }
     val openNova = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { nova = it }
     var last by remember { mutableStateOf(prefs.sp.getLong("lastBackup", 0L)) }
     var restoring by remember { mutableStateOf<String?>(null) }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        runCatching { context.contentResolver.openOutputStream(uri)!!.use { it.write(backupJson().toByteArray()) } }
-            .onSuccess {
-                last = System.currentTimeMillis(); prefs.sp.edit { putLong("lastBackup", last) }
-                android.widget.Toast.makeText(context, "Backup saved", android.widget.Toast.LENGTH_SHORT).show()
-            }
-            .onFailure { android.widget.Toast.makeText(context, "Couldn't save: ${it.message}", android.widget.Toast.LENGTH_LONG).show() }
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { context.contentResolver.openOutputStream(uri)!!.use { it.write(backupJson().toByteArray()) } } }
+                .onSuccess {
+                    last = System.currentTimeMillis(); prefs.sp.edit { putLong("lastBackup", last) }
+                    android.widget.Toast.makeText(context, "Backup saved", android.widget.Toast.LENGTH_SHORT).show()
+                }
+                .onFailure { android.widget.Toast.makeText(context, "Couldn't save: ${it.message}", android.widget.Toast.LENGTH_LONG).show() }
+        }
     }
     val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        runCatching { context.contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() } }
-            .onSuccess { restoring = it }
-            .onFailure { android.widget.Toast.makeText(context, "Couldn't read the file", android.widget.Toast.LENGTH_LONG).show() }
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { context.contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() } } }
+                .onSuccess { restoring = it }
+                .onFailure { android.widget.Toast.makeText(context, "Couldn't read the file", android.widget.Toast.LENGTH_LONG).show() }
+        }
     }
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Group(null, listOf(
@@ -835,9 +842,11 @@ private fun BackupSettings(apps: Apps) {
             confirmButton = {
                 Text("Import", color = Accent, fontSize = 15.sp, modifier = Modifier.clip(CircleShape).clickable {
                     nova = null
-                    runCatching { importNova(context, uri, apps) }
-                        .onSuccess { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show(); restart(context) }
-                        .onFailure { android.widget.Toast.makeText(context, it.message ?: "Not a Nova backup", android.widget.Toast.LENGTH_LONG).show() }
+                    scope.launch {
+                        runCatching { importNova(context, uri, apps) }
+                            .onSuccess { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show(); restart(context) }
+                            .onFailure { android.widget.Toast.makeText(context, it.message ?: "Not a Nova backup", android.widget.Toast.LENGTH_LONG).show() }
+                    }
                 }.padding(12.dp))
             },
             dismissButton = { Text("Cancel", color = Muted, fontSize = 15.sp, modifier = Modifier.clip(CircleShape).clickable { nova = null }.padding(12.dp)) },
