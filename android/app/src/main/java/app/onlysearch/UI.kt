@@ -404,7 +404,7 @@ fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: I
     CompositionLocalProvider(LocalDragDrop provides dnd, LocalPickWidgets provides { pkg: String? -> pickFor = pkg; picking = true }) {
     ProvideTextStyle(TextStyle(fontFamily = Sans, color = Fg)) {
         // Follows a drag from the root: the tile that started it may be disposed mid-drag (its page scrolled away).
-        Box(Modifier.fillMaxSize().pointerInput(Unit) {
+        Box(Modifier.fillMaxSize().onGloballyPositioned { homeOnScreen = it.localToScreen(Offset.Zero) }.pointerInput(Unit) {
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                 while (true) {
@@ -640,7 +640,7 @@ internal fun HomeGrid(apps: Apps, widgets: Widgets, index: Int, page: HomePage, 
         val cw = maxWidth / prefs.columns
         val ch = maxHeight / prefs.rows
         // Keep ~10dp between a label and the icon below it; small cells shrink the icon.
-        val icon = minOf(58.dp * prefs.iconSize / 100, cw * prefs.appSpan - 12.dp, ch * prefs.appSpan - if (prefs.labels) 34.dp else 10.dp)
+        val icon = minOf(58.dp * prefs.iconSize / 100, cw * prefs.appSpan - 12.dp, ch * prefs.appSpan - if (prefs.labels) 34.dp else 10.dp).coerceAtLeast(0.dp)
         val drop = dnd.item?.let { d -> dnd.grids[page.id]?.let { dnd.target(d, dnd.pos, it) }?.let { it to apps.fits(index, it.x, it.y, it.w, it.h, d.key) } }
         if (drop != null) {
             val (t, ok) = drop
@@ -1210,7 +1210,7 @@ private fun ShortcutRow(apps: Apps, s: Shortcut, icon: ImageBitmap?, onDragging:
                     var dragging = false
                     while (true) {
                         val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                        val at = coords[0]?.takeIf { it.isAttached }?.localToScreen(c.position) ?: break
+                        val at = coords[0]?.takeIf { it.isAttached }?.let { it.localToScreen(c.position) - homeOnScreen } ?: break
                         if (!c.pressed) {
                             if (dragging) dnd.end() else apps.launch(s, source())
                             onDone(); return@awaitEachGesture

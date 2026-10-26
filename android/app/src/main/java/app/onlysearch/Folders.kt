@@ -67,7 +67,7 @@ internal fun FolderTile(apps: Apps, key: String, labelColor: Color?, size: Dp) {
     ) {
         val shape = iconShape(prefs.iconShape, size)
         Box(Modifier.size(size).clip(shape).background(Tile.copy(alpha = 0.85f)).border(1.dp, TileLine, shape).padding(size * 0.14f)) {
-            val mini = (size * 0.72f - 4.dp) / 2
+            val mini = ((size * 0.72f - 4.dp) / 2).coerceAtLeast(0.dp)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 folder.apps.mapNotNull(apps::byKey).take(4).chunked(2).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { row.forEach { AppIcon(apps, it, mini) } }

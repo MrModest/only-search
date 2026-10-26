@@ -830,7 +830,7 @@ private fun BackupSettings(apps: Apps) {
             { ValueRow("Import from Nova Launcher", ".novabackup", Muted) { openNova.launch(arrayOf("*/*")) } },
         ))
         Text("A backup holds your home pages, dock, drawer groups, hidden apps, custom names, gestures, all settings and calculator history. " +
-            "Widgets come back on this phone; on another phone, add them again.", color = Muted, fontSize = 13.sp, lineHeight = 19.sp,
+            "Widgets come back on this phone unless removed since.", color = Muted, fontSize = 13.sp, lineHeight = 19.sp,
             modifier = Modifier.padding(horizontal = 4.dp))
     }
     nova?.let { uri ->

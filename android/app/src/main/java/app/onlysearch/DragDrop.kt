@@ -21,7 +21,7 @@ import kotlin.math.roundToInt
 /** An item picked up for dragging. [from] is "grid", "dock", "drawer", "popup" or "picker"; [grab] is the finger's offset inside it. */
 data class Dragged(val key: String, val w: Int, val h: Int, val from: String, val grab: Offset, val size: Size, val icon: ImageBitmap? = null)
 
-/** Drag-and-drop state shared by every screen. Positions are window coordinates. */
+/** Drag-and-drop state shared by every screen. Positions are the activity window's coordinates. */
 class DragDrop {
     var item by mutableStateOf<Dragged?>(null)
     var pos by mutableStateOf(Offset.Zero)
@@ -77,6 +77,9 @@ internal suspend fun PointerInputScope.tapHoldDrag(
     try { tapHoldDragBody(down, coords, pass, onPress, onTap, onLongPress, onDragStart, onDrag, onDragEnd) } finally { DragDropPressing.value = false }
 }
 
+/** The activity window's top-left on screen. Popups are windows of their own, so drags map screen positions back through this. */
+internal var homeOnScreen = Offset.Zero
+
 /** Shared flag for [DragDrop.pressingTile]; a plain holder because the detector has no DragDrop at hand. */
 internal object DragDropPressing { var value = false }
 
@@ -113,7 +116,7 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.tap
         c.consume()
         if (!c.pressed) break
         if (onDragStart == null) continue
-        val window = coords()?.takeIf { it.isAttached }?.localToWindow(c.position) ?: continue
+        val window = coords()?.takeIf { it.isAttached }?.let { it.localToScreen(c.position) - homeOnScreen } ?: continue
         if (!dragging && (c.position - down.position).getDistance() > viewConfiguration.touchSlop) {
             dragging = true
             onDragStart(down.position, window)
