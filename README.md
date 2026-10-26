@@ -113,4 +113,6 @@ Only Search is licensed under the GNU Affero General Public License v3.0, see [L
 
 Additional permission under GNU AGPL version 3 section 7: If you modify this Program, or any covered work, by linking or combining it with SoulverCore (or a modified version of that library), containing parts covered by the terms of the SoulverCore license, the licensors of this Program grant you additional permission to convey the resulting work.
 
+This permission applies only to Only Search's own code. SoulverCore is not part of this project, is not covered by the AGPL, and stays under its own license from Soulver; no rights to it are granted here.
+
 SoulverCore is a separate component under its own license, not covered by the AGPL. See its [license terms](https://github.com/soulverteam/SoulverCore/blob/master/LICENSE.md).
