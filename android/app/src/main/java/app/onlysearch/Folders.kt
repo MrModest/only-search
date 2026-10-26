@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
@@ -29,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -117,7 +120,10 @@ private fun FolderSheet(apps: Apps, key: String, icon: Dp, cell: Dp, onClose: ()
                     .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                AppGrid(apps, list, icon, Fg, columns = columns, rowGap = 16.dp, drag = from)
+                // Long-press drags out; an immediate vertical swipe scrolls. The name field stays below, outside the scroll.
+                Box(Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.7f).dp).verticalScroll(rememberScrollState())) {
+                    AppGrid(apps, list, icon, Fg, columns = columns, rowGap = 16.dp, drag = from)
+                }
                 Field(name, { name = it }, "Folder name", Modifier.fillMaxWidth(), autoFocus = false, fontSize = 17, align = TextAlign.Center) { save() }
             }
         }
