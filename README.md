@@ -45,7 +45,7 @@ Left to right, top to bottom: home screen, search, a unit conversion, a time zon
 - Type a sum, a percentage or a conversion and the answer appears as you type. A few things to try:
   - Maths and percentages: `(128*3.5)/4 + 12^2`, `20% of 340`, `$48 + 15% tip`
   - Units: `65 kg in pounds`, or just `5 ft` and it shows metres. Bare units convert to your home unit system (Settings, Search & calculator, Defaults).
-  - Currencies and crypto, use live rates: `12 USD` shows your home currency, `12 USD in GBP`
+  - Currencies and crypto (live rates): `12 USD` shows your home currency, `12 USD in GBP`
   - Time zones: `12:00 Berlin in Moscow`, `msk time`, `time in Tokyo`
   - 12 or 24 hour time: `1 pm` shows 13:00 when your phone uses a 24 hour locale
   - Dates and durations: `today + 1`, `tomorrow + 3 days`, `today + 3 weeks`, `12:00 + 1h 35m`
