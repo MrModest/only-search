@@ -105,7 +105,7 @@ class Apps(private val context: Context) {
     val recent = mutableStateListOf<String>().apply { addAll(sp.list("recent")) }
     val hidden = mutableStateListOf<String>().apply { addAll(sp.list("hidden")) }
     /** Apps shown in the drawer and search: everything not hidden. */
-    val visible get() = all.filter { it.key !in hidden }
+    val visible get() = hidden.toSet().let { h -> all.filter { it.key !in h } }
     private val systemLabels = mutableMapOf<String, String>()
     val groups = mutableStateListOf<AppGroup>().apply { addAll(parseGroups(sp.getString("groups", "[]")!!)) }
     val folders = mutableStateMapOf<String, Folder>().apply { putAll(parseFolders(sp.getString("folders", "{}")!!)) }

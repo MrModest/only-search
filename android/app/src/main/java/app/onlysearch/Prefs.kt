@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.graphics.Color
 import androidx.core.content.edit
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
@@ -78,6 +79,11 @@ class Prefs(context: Context) {
 
     // Look & feel
     var accent by P("set.accent", "sky")
+    /** [accent] as a colour, parsed once per change. */
+    val accentColor by derivedStateOf {
+        accent.takeIf { it.startsWith("#") }?.let { runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull() }
+            ?: Accents.firstOrNull { it.first == accent }?.second ?: Accents[0].second
+    }
     var black by P("set.black", false)
     var themedIcons by P("set.themedIcons", false)
     /** Package of the icon pack in use, or "" for the apps' own icons. */

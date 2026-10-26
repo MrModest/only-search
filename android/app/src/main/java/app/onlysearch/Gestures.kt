@@ -152,7 +152,7 @@ private fun ActionPicker(apps: Apps, title: String, current: String, onPick: (St
                 }
                 LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                     item { Label("Launcher actions", Modifier.padding(start = 4.dp, bottom = 8.dp)) }
-                    items(LauncherActions) { (id, name) -> PickRow(apps, name, id == current, null) { onPick(id) } }
+                    items(LauncherActions, key = { it.first }) { (id, name) -> PickRow(apps, name, id == current, null) { onPick(id) } }
                     item {
                         Label("Apps and shortcuts", Modifier.padding(start = 4.dp, top = 18.dp, bottom = 8.dp))
                         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp).height(44.dp).clip(RoundedCornerShape(14.dp)).background(FieldBg)

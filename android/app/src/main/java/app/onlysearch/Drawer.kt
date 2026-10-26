@@ -62,10 +62,12 @@ internal fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: 
     if (tab >= apps.groups.size) tab = -1
     val cols = prefs.drawerColumns
     val group = apps.groups.getOrNull(tab)
-    val frequent = if (prefs.suggested && group == null) apps.frequent(cols) else emptyList()
-    val shown = group?.let { g -> apps.visible.filter { it.key in g.apps } } ?: apps.visible
+    // Derived so scrubbing (each letter change recomposes the drawer) doesn't rebuild the lists.
+    val visible by remember(apps) { derivedStateOf { apps.visible } }
+    val frequent by remember(apps) { derivedStateOf { if (prefs.suggested && apps.groups.getOrNull(tab) == null) apps.frequent(prefs.drawerColumns) else emptyList() } }
+    val shown by remember(apps) { derivedStateOf { apps.groups.getOrNull(tab)?.let { g -> visible.filter { it.key in g.apps } } ?: visible } }
     val scrub = prefs.scrubber && group == null
-    val sections = shown.groupBy { it.label.firstOrNull()?.uppercaseChar()?.takeIf(Char::isLetter) ?: '#' }.toSortedMap()
+    val sections by remember(apps) { derivedStateOf { shown.groupBy { it.label.firstOrNull()?.uppercaseChar()?.takeIf(Char::isLetter) ?: '#' }.toSortedMap() } }
     // Grid index of each section header, for the letter scrubber.
     val headerIndex = remember(sections, frequent) {
         var i = if (frequent.isEmpty()) 0 else 2 + frequent.size
@@ -101,23 +103,23 @@ internal fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: 
             LazyVerticalGrid(GridCells.Fixed(cols), Modifier.fillMaxSize().padding(start = 12.dp, end = if (scrub) 28.dp else 12.dp).nestedScroll(scroll), grid,
                 verticalArrangement = Arrangement.spacedBy(10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (frequent.isNotEmpty()) {
-                    item(span = { GridItemSpan(cols) }) { Label("Suggested", Modifier.padding(start = 6.dp, top = 6.dp)) }
-                    items(frequent, key = { "f" + it.key }) { AppTile(apps, it, Fg, 54.dp, drag = "drawer") }
-                    item(span = { GridItemSpan(cols) }) { Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF22252A))) }
+                    item(span = { GridItemSpan(cols) }, contentType = "label") { Label("Suggested", Modifier.padding(start = 6.dp, top = 6.dp)) }
+                    items(frequent, key = { "f" + it.key }, contentType = { "app" }) { AppTile(apps, it, Fg, 54.dp, drag = "drawer") }
+                    item(span = { GridItemSpan(cols) }, contentType = "divider") { Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF22252A))) }
                 }
                 sections.forEach { (letter, group) ->
-                    item(span = { GridItemSpan(cols) }, key = "h$letter") {
+                    item(span = { GridItemSpan(cols) }, key = "h$letter", contentType = "header") {
                         Text(letter.toString(), color = Accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
                     }
-                    items(group, key = { it.key }) { AppTile(apps, it, Fg, 54.dp, drag = "drawer") }
+                    items(group, key = { it.key }, contentType = { "app" }) { AppTile(apps, it, Fg, 54.dp, drag = "drawer") }
                 }
             }
             if (group != null && shown.isEmpty()) Text("No apps in “${group.name}” yet. Long-press the tab to add some.", color = Muted, fontSize = 14.sp,
                 modifier = Modifier.align(Alignment.TopCenter).padding(24.dp))
             if (scrub) {
                 // Full A–Z like the mock-up; a letter with no apps jumps to the next one that has some.
-                val letters = ('A'..'Z').toList() + headerIndex.keys.filter { it !in 'A'..'Z' }
-                val target = letters.associateWith { l -> headerIndex[l] ?: headerIndex.entries.firstOrNull { it.key > l }?.value ?: headerIndex.values.lastOrNull() ?: 0 }
+                val letters = remember(headerIndex) { ('A'..'Z').toList() + headerIndex.keys.filter { it !in 'A'..'Z' } }
+                val target = remember(headerIndex) { letters.associateWith { l -> headerIndex[l] ?: headerIndex.entries.firstOrNull { it.key > l }?.value ?: headerIndex.values.lastOrNull() ?: 0 } }
                 Column(Modifier.align(Alignment.CenterEnd).width(28.dp).fillMaxHeight().padding(top = 8.dp, bottom = 16.dp).testTag("scrubber")
                     .onGloballyPositioned { scrubTop = it.positionInParent().y }
                     .pointerInput(headerIndex) {
@@ -152,7 +154,7 @@ internal fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: 
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF22252A)))
-        Pill("Search ${apps.visible.size} apps or calculate", Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
+        Pill("Search ${visible.size} apps or calculate", Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
             height = 52.dp, onClick = onSearch)
     }
     editGroup?.let { i -> GroupEditor(apps, i) { editGroup = null; if (i == -1 && apps.groups.isNotEmpty()) tab = apps.groups.lastIndex } }

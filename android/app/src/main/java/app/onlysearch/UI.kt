@@ -306,7 +306,7 @@ fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: I
 /** Drop here to take an app, shortcut or widget off home. */
 @Composable
 private fun BoxScope.RemoveZone(dnd: DragDrop) {
-    val over = dnd.remove.contains(dnd.pos)
+    val over by remember { derivedStateOf { dnd.remove.contains(dnd.pos) } }
     val slack = with(LocalDensity.current) { 24.dp.toPx() }
     Row(
         Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 10.dp).height(48.dp)

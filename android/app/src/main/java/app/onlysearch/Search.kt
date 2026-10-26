@@ -74,7 +74,9 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
             else Calc(q.trim(), r, us, homeCurrencyQuery(q.trim())?.let { Soulver.evaluate(it) }?.takeIf { it.isNotBlank() && it != r })
         }
     }
-    val (matches, matchMicros) = remember(query, apps.all.toList(), apps.hidden.size) {
+    // A copy only when the list changes; an unchanged one compares by identity.
+    val all by remember(apps) { derivedStateOf { apps.all.toList() } }
+    val (matches, matchMicros) = remember(query, all, apps.hidden.size) {
         val t0 = System.nanoTime()
         // Frequently opened apps get up to +10 on the match score, enough to win a tie, not to beat a better match.
         apps.visible.mapNotNull { a -> match(a.label, query, prefs.fuzzy)?.let { Triple(a, it.first + if (prefs.boostFrequent) minOf(apps.count(a), 10) else 0, it.second) } }

@@ -216,7 +216,9 @@ internal fun HomeGrid(apps: Apps, widgets: Widgets, index: Int, page: HomePage, 
         val ch = maxHeight / prefs.rows
         // Keep ~10dp between a label and the icon below it; small cells shrink the icon.
         val icon = minOf(58.dp * prefs.iconSize / 100, cw * prefs.appSpan - 12.dp, ch * prefs.appSpan - if (prefs.labels) 34.dp else 10.dp).coerceAtLeast(0.dp)
-        val drop = dnd.item?.let { d -> dnd.grids[page.id]?.let { dnd.target(d, dnd.pos, it) }?.let { it to apps.fits(index, it.x, it.y, it.w, it.h, d.key) } }
+        // Derived so a pointer move only recomposes the page when the target cell changes.
+        val target by remember(page.id) { derivedStateOf { dnd.item?.let { d -> dnd.grids[page.id]?.let { dnd.target(d, dnd.pos, it) } } } }
+        val drop = target?.let { it to apps.fits(index, it.x, it.y, it.w, it.h, it.key) }
         if (drop != null) {
             val (t, ok) = drop
             Box(Modifier.offset(cw * t.x, ch * t.y).size(cw * t.w, ch * t.h).padding(2.dp).clip(RoundedCornerShape(WidgetCorner))
@@ -418,10 +420,10 @@ internal fun WidgetPicker(apps: Apps, widgets: Widgets, only: String?, onClose: 
             LazyColumn(Modifier.weight(1f).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val ours = Builtins.filter { only == null && (filter.isBlank() || it.label.contains(filter, true) || "only search".contains(filter, true)) }
                 if (ours.isNotEmpty()) {
-                    item(key = "builtin") {
+                    item(key = "builtin", contentType = "group") {
                         Text("Only Search", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.heightIn(min = 40.dp).wrapContentHeight())
                     }
-                    items(ours, key = { "b:" + it.kind }) { b ->
+                    items(ours, key = { "b:" + it.kind }, contentType = { "builtin" }) { b ->
                         val (w, h) = b.size()
                         WidgetPreview(apps, "pb:${b.kind}", b.label, w, h, null, Modifier, onDragging = { dragging = true }, onDropped = onClose,
                             onClick = {
@@ -434,7 +436,7 @@ internal fun WidgetPicker(apps: Apps, widgets: Widgets, only: String?, onClose: 
                 }
                 shown.forEach { (pkg, label, list) ->
                     val expanded = open == pkg || filter.isNotBlank()
-                    item(key = pkg) {
+                    item(key = pkg, contentType = "group") {
                         Row(Modifier.fillMaxWidth().heightIn(min = 40.dp).clickable { open = if (open == pkg) null else pkg },
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             val icon = apps.all.firstOrNull { it.component.packageName == pkg }?.let { apps.icons[it.key] }
@@ -450,7 +452,7 @@ internal fun WidgetPicker(apps: Apps, widgets: Widgets, only: String?, onClose: 
                         val last = rows.lastOrNull()
                         if (cells(p, density).first <= 2 && last?.size == 1 && cells(last[0], density).first <= 2) last.add(p) else rows.add(mutableListOf(p))
                     }
-                    if (expanded) items(rows, key = { it[0].provider.flattenToString() }) { row ->
+                    if (expanded) items(rows, key = { it[0].provider.flattenToString() }, contentType = { "widgets" }) { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             row.forEach { p ->
                                 WidgetPreview(apps, p, Modifier.weight(1f), onDragging = { dragging = true }, onDropped = onClose) { widgets.add(p); onClose() }

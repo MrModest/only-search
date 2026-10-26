@@ -76,11 +76,12 @@ import kotlin.math.roundToInt
 @Composable
 internal fun rememberLaunchSource(): Triple<Modifier, () -> LaunchSource, () -> Rect> {
     val view = LocalView.current
-    var bounds by remember { mutableStateOf(Rect.Zero) }
+    val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    // Read in composition by an open menu, so it stays state; launch bounds are only needed on tap.
     var screen by remember { mutableStateOf(Rect.Zero) }
     return Triple(
-        Modifier.onGloballyPositioned { bounds = it.boundsInWindow(); screen = Rect(it.localToScreen(Offset.Zero), it.size.toSize()) },
-        { LaunchSource(view, bounds.toAndroidRect()) }, { screen },
+        Modifier.onGloballyPositioned { coords[0] = it; screen = Rect(it.localToScreen(Offset.Zero), it.size.toSize()) },
+        { LaunchSource(view, (coords[0]?.takeIf { it.isAttached }?.boundsInWindow() ?: Rect.Zero).toAndroidRect()) }, { screen },
     )
 }
 

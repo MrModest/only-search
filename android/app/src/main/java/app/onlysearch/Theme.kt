@@ -41,8 +41,7 @@ internal val PillLine = Color(0xFF34373E)
 internal val ChipLine = Color(0xFF2E3138)
 internal val Accents = listOf("sky" to Color(0xFF7CC4FA), "amber" to Color(0xFFF5B04A), "mint" to Color(0xFF7FD8B0), "rose" to Color(0xFFF59AB0), "violet" to Color(0xFFB9A2F8), "white" to Color(0xFFF2F2F2))
 /** A named accent, or a custom one stored as "#RRGGBB". */
-internal val Accent get() = prefs.accent.takeIf { it.startsWith("#") }?.let { runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull() }
-    ?: Accents.firstOrNull { it.first == prefs.accent }?.second ?: Accents[0].second
+internal val Accent get() = prefs.accentColor
 internal val OnAccent get() = lerp(Color(0xFF06121C), Accent, 0.05f)
 internal val AccentCard get() = lerp(Color(0xFF0E0F12), Accent, 0.07f)
 internal val AccentLine get() = lerp(Color(0xFF0E0F12), Accent, 0.28f)
