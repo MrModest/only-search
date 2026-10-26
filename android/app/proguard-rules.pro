@@ -13,6 +13,3 @@
 # The androidTest APK reuses these classes from the app APK (it only ships what the app lacks).
 -keep class androidx.tracing.** { *; }
 -keep class kotlin.** { *; }
--keep class androidx.compose.ui.platform.InfiniteAnimationPolicy** { *; }
--keep class androidx.compose.runtime.MonotonicFrameClock** { *; }
--keep class com.google.common.util.concurrent.ListenableFuture { *; }

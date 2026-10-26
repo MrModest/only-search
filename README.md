@@ -35,4 +35,4 @@ Download the APK from [Releases](https://github.com/MrModest/only-search/release
 
 ## Build
 
-The Swift bridge to SoulverCore is built in GitHub Actions (`.github/workflows/build.yml`). Every push to `main` produces a signed APK and runs the emulator tests. The screenshots above come from `ScreenshotTest`, run by the manual `screenshots` workflow. See [docs/ANDROID.md](docs/ANDROID.md) for the pipeline and [docs/DESIGN.md](docs/DESIGN.md) for the design.
+The Swift bridge to SoulverCore is built in GitHub Actions (`.github/workflows/build.yml`). Every push to `main` produces a signed APK and runs the emulator tests. The screenshots above are taken on a local emulator. See [docs/ANDROID.md](docs/ANDROID.md) for the pipeline and [docs/DESIGN.md](docs/DESIGN.md) for the design.
