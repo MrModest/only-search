@@ -1,6 +1,7 @@
 package app.onlysearch
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -9,8 +10,10 @@ import android.net.Uri
 import android.provider.ContactsContract
 import android.provider.ContactsContract.CommonDataKinds.Phone
 import android.provider.Settings
+import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.content.edit
 
 /** A system settings screen findable from search. [page] set = one of the launcher's own settings pages instead. */
 data class SettingsEntry(val label: String, val where: String, val action: String, val keywords: String = "", val page: String? = null)
@@ -76,6 +79,17 @@ fun searchSettings(query: String, fuzzy: Boolean): List<Pair<SettingsEntry, IntR
 data class Person(val id: Long, val name: String, val label: String, val number: String, val photo: ImageBitmap?)
 
 fun hasContacts(context: Context) = context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+
+/** Asks for [permission]; once it is permanently denied the system shows no dialog, so open the app's settings instead. */
+fun askPermission(context: Context, permission: String, ask: ManagedActivityResultLauncher<String, Boolean>) {
+    val key = "asked.$permission"
+    if (prefs.sp.getBoolean(key, false) && !(context as Activity).shouldShowRequestPermissionRationale(permission)) {
+        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)))
+    } else {
+        prefs.sp.edit { putBoolean(key, true) }
+        ask.launch(permission)
+    }
+}
 
 /** Contacts with a phone number whose name matches [query]. Blocking; call off the main thread. */
 fun searchContacts(context: Context, query: String): List<Person> {

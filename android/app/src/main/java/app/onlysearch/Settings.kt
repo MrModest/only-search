@@ -413,7 +413,7 @@ private fun SourcesSettings() {
             { SwitchRow("Apps", "Always on", true) {} },
             {
                 SwitchRow("Contacts", if (hasContacts(context)) "Names, with call and message buttons" else "Asks for contacts access", prefs.srcContacts) { on ->
-                    if (on && !hasContacts(context)) ask.launch(android.Manifest.permission.READ_CONTACTS) else prefs.srcContacts = on
+                    if (on && !hasContacts(context)) askPermission(context, android.Manifest.permission.READ_CONTACTS, ask) else prefs.srcContacts = on
                 }
             },
             { SwitchRow("Settings", "System settings and this launcher's pages", prefs.srcSettings) { prefs.srcSettings = it } },

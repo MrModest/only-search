@@ -196,7 +196,9 @@ internal fun BuiltinWidget(cell: Cell, modifier: Modifier = Modifier, preview: B
     val kind = Builtins.firstOrNull { it.kind == cell.builtin } ?: return
     if (!kind.agenda) return Clock(modifier.fillMaxSize())
     val context = LocalContext.current
-    DisposableEffect(Unit) {
+    val granted = calendarChanges >= 0 && hasCalendar(context)
+    DisposableEffect(granted) {
+        if (!granted) return@DisposableEffect onDispose {}
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) { override fun onChange(selfChange: Boolean) { calendarChanges++ } }
         context.contentResolver.registerContentObserver(CalendarContract.CONTENT_URI, true, observer)
         onDispose { context.contentResolver.unregisterContentObserver(observer) }
@@ -204,7 +206,7 @@ internal fun BuiltinWidget(cell: Cell, modifier: Modifier = Modifier, preview: B
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { if (it) calendarChanges++ }
     if (calendarChanges >= 0 && !hasCalendar(context)) return Column(
         modifier.fillMaxSize().clip(RoundedCornerShape(WidgetCorner)).background(Card.copy(alpha = 0.82f)).border(1.dp, CardLine, RoundedCornerShape(WidgetCorner))
-            .then(if (preview) Modifier else Modifier.clickable { ask.launch(Manifest.permission.READ_CALENDAR) }).padding(horizontal = 14.dp),
+            .then(if (preview) Modifier else Modifier.clickable { askPermission(context, Manifest.permission.READ_CALENDAR, ask) }).padding(horizontal = 14.dp),
         verticalArrangement = Arrangement.Center,
     ) {
         Text(kind.label, fontSize = 15.sp, maxLines = 1)

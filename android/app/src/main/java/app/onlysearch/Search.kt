@@ -183,7 +183,7 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
                     Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Label("People", Modifier.padding(horizontal = 4.dp))
                         ResultCard {
-                            if (wantsPeople) ContactsPrompt(onAllow = { askContacts.launch(android.Manifest.permission.READ_CONTACTS) }, onOff = { prefs.srcContacts = false })
+                            if (wantsPeople) ContactsPrompt(onAllow = { askPermission(context, android.Manifest.permission.READ_CONTACTS, askContacts) }, onOff = { prefs.srcContacts = false })
                             people.forEachIndexed { i, p -> if (i > 0) RowDivider(); PersonRow(p, query) }
                         }
                     }
