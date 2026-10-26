@@ -153,17 +153,11 @@ class Apps(private val context: Context) {
     fun onHome(app: App) = pages.any { p -> p.items.any { it.key == app.key } } || folders.values.any { app.key in it.apps }
 
     /** True if a w×h block fits at (x, y) on [page] without overlapping anything except [ignore]. */
-    fun fits(page: Int, x: Int, y: Int, w: Int, h: Int, ignore: String? = null): Boolean {
-        if (x < 0 || y < 0 || x + w > prefs.columns || y + h > prefs.rows) return false
-        return pages[page].items.none { it.key != ignore && x < it.x + it.w && it.x < x + w && y < it.y + it.h && it.y < y + h }
-    }
+    fun fits(page: Int, x: Int, y: Int, w: Int, h: Int, ignore: String? = null) =
+        cellFits(pages[page].items, x, y, w, h, prefs.columns, prefs.rows, ignore)
 
     /** First free spot for a w×h block; apps fill up from the bottom row, widgets down from the top. */
-    fun freeSpot(page: Int, w: Int, h: Int, fromBottom: Boolean): Pair<Int, Int>? {
-        val ys = (0..prefs.rows - h).let { if (fromBottom) it.reversed() else it }
-        for (y in ys) for (x in 0..prefs.columns - w) if (fits(page, x, y, w, h)) return x to y
-        return null
-    }
+    fun freeSpot(page: Int, w: Int, h: Int, fromBottom: Boolean) = findSpot(pages[page].items, w, h, prefs.columns, prefs.rows, fromBottom)
 
     /** Moves [cell]'s item to that spot on [page], from wherever it was. False if the spot isn't free. */
     fun place(page: Int, cell: Cell): Boolean {
@@ -235,21 +229,14 @@ class Apps(private val context: Context) {
         savePages()
     }
 
-    /** After the grid shrinks: shrink widgets that are too big and move what's off the grid to a free spot. */
+    /** After the grid shrinks: see [fitPages]. */
     fun fitGrid() {
-        var changed = false
-        for (p in pages.indices) {
-            val items = pages[p].items
-            pages[p] = pages[p].copy(items = emptyList())
-            items.forEach { c ->
-                val s = c.copy(w = c.w.coerceAtMost(prefs.columns), h = c.h.coerceAtMost(prefs.rows))
-                if (s == c && fits(p, s.x, s.y, s.w, s.h)) { pages[p] = pages[p].copy(items = pages[p].items + s); return@forEach }
-                changed = true
-                val (x, y) = freeSpot(p, s.w, s.h, fromBottom = s.widgetId == null) ?: return@forEach
-                pages[p] = pages[p].copy(items = pages[p].items + s.copy(x = x, y = y))
-            }
+        val fitted = fitPages(pages.map { it.items }, prefs.columns, prefs.rows)
+        if (fitted == pages.map { it.items }) return
+        fitted.forEachIndexed { i, items ->
+            if (i > pages.lastIndex) pages.add(HomePage(items)) else if (pages[i].items != items) pages[i] = pages[i].copy(items = items)
         }
-        if (changed) savePages()
+        savePages()
     }
 
     fun addPage() { pages.add(HomePage()); savePages() }
@@ -303,14 +290,15 @@ class Apps(private val context: Context) {
 
     fun saveDock() = sp.edit { putString("dock", dock.joinToString("\n")) }
 
-    /** Moves an app into the dock at [index] (reordering if it's already there); takes it off the home grid. */
-    fun dropOnDock(key: String, index: Int) {
+    /** Moves an app into the dock at [index] (reordering if it's already there); takes it off the home grid. False if the dock is full. */
+    fun dropOnDock(key: String, index: Int): Boolean {
         // Apps past the dock size (after it was made smaller) don't show; drop them rather than keep them invisibly.
         while (dock.size > prefs.dockSize) dock.removeAt(dock.lastIndex)
-        if (key !in dock && dock.size >= prefs.dockSize) return
+        if (key !in dock && dock.size >= prefs.dockSize) return false
         dock.remove(key)
         dock.add(index.coerceIn(0, dock.size), key)
         dropItem(key); savePages(); saveDock()
+        return true
     }
 
     /** [place], or for an app dropped on another app: the two swap cells. */
@@ -338,20 +326,21 @@ class Apps(private val context: Context) {
 
     fun renameFolder(key: String, name: String) { folders[key]?.let { saveFolder(key, it.copy(name = name)) } }
 
-    /** [app] dropped on [over] (an app or a folder at a 1×1 cell): joins the folder, or both become a new folder in that cell. */
-    fun dropOnto(page: Int, over: Cell, app: String) {
-        if (over.key == app) return
+    /** [app] dropped on [over] (an app or a folder at a 1×1 cell): joins the folder, or both become a new folder in that cell. False if nothing changed. */
+    fun dropOnto(page: Int, over: Cell, app: String): Boolean {
+        if (over.key == app) return false
         if (over.key.startsWith("f:")) {
-            val f = folders[over.key] ?: return
+            val f = folders[over.key] ?: return false
             saveFolder(over.key, f.copy(apps = f.apps - app + app))
             dropItem(app); if (dock.remove(app)) saveDock()
-            savePages(); return
+            savePages(); return true
         }
         val key = newFolderKey()
         saveFolder(key, Folder("Folder", listOf(over.key, app)))
         dropItem(app); dropItem(over.key); if (dock.remove(app)) saveDock()
         pages[page] = pages[page].copy(items = pages[page].items + over.copy(key = key))
         savePages()
+        return true
     }
 
     /** Takes [app] out of a folder. A folder left with one app turns back into that app; an empty one goes away. */
@@ -484,6 +473,40 @@ class Apps(private val context: Context) {
 
     private fun android.content.SharedPreferences.list(name: String) =
         getString(name, "")!!.split("\n").filter { it.isNotEmpty() }
+}
+
+/** True if a w×h block fits at (x, y) on a cols×rows grid without overlapping [items] other than [ignore]. */
+fun cellFits(items: List<Cell>, x: Int, y: Int, w: Int, h: Int, cols: Int, rows: Int, ignore: String? = null): Boolean {
+    if (x < 0 || y < 0 || x + w > cols || y + h > rows) return false
+    return items.none { it.key != ignore && x < it.x + it.w && it.x < x + w && y < it.y + it.h && it.y < y + h }
+}
+
+/** First free spot for a w×h block; apps fill up from the bottom row, widgets down from the top. */
+fun findSpot(items: List<Cell>, w: Int, h: Int, cols: Int, rows: Int, fromBottom: Boolean): Pair<Int, Int>? {
+    val ys = (0..rows - h).let { if (fromBottom) it.reversed() else it }
+    for (y in ys) for (x in 0..cols - w) if (cellFits(items, x, y, w, h, cols, rows)) return x to y
+    return null
+}
+
+/** Fits [pages] to a cols×rows grid: items that still fit stay put, oversized ones are clamped, and the rest move to a free spot
+ *  on their own page, then any other page, then new pages at the end. Nothing is dropped. */
+fun fitPages(pages: List<List<Cell>>, cols: Int, rows: Int): List<List<Cell>> {
+    val out = pages.map { mutableListOf<Cell>() }.toMutableList()
+    val moving = mutableListOf<Pair<Int, Cell>>()
+    pages.forEachIndexed { p, items ->
+        items.forEach { c ->
+            val s = c.copy(w = c.w.coerceAtMost(cols), h = c.h.coerceAtMost(rows))
+            if (s == c && cellFits(out[p], s.x, s.y, s.w, s.h, cols, rows)) out[p] += s else moving += p to s
+        }
+    }
+    for ((home, s) in moving) {
+        val fromBottom = s.widgetId == null
+        val p = (listOf(home) + out.indices).firstOrNull { findSpot(out[it], s.w, s.h, cols, rows, fromBottom) != null }
+            ?: out.size.also { out += mutableListOf<Cell>() }
+        val (x, y) = findSpot(out[p], s.w, s.h, cols, rows, fromBottom)!!
+        out[p] += s.copy(x = x, y = y)
+    }
+    return out
 }
 
 /** The adaptive icon's monochrome layer, centred like the launcher draws it, or null. */

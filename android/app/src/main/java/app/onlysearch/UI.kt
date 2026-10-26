@@ -375,14 +375,13 @@ fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: I
                 else widgets.providers().firstOrNull { pickerKey(it) == d.key }?.let { apps.widgetSpot = page to target; apps.currentPage = page; widgets.add(it) }
             }
             apps.byKey(d.key) != null && dnd.dock.contains(at) -> {
-                apps.dropOnDock(d.key, ((at.x - dnd.dock.left) / (dnd.dock.width / prefs.dockSize)).toInt())
-                leaveFolder()
+                if (apps.dropOnDock(d.key, ((at.x - dnd.dock.left) / (dnd.dock.width / prefs.dockSize)).toInt())) leaveFolder()
             }
             target != null -> {
                 // An app dropped on an app makes a folder; on a folder, it joins it.
                 val over = apps.pages[page].items.firstOrNull { it.x == target.x && it.y == target.y && it.w == target.w && it.h == target.h && it.key != d.key && !it.isWidget }
                 if (apps.byKey(d.key) != null && over != null && over.key != folder && (over.key.startsWith("f:") || apps.byKey(over.key) != null)) {
-                    apps.dropOnto(page, over, d.key); leaveFolder()
+                    if (apps.dropOnto(page, over, d.key)) leaveFolder()
                 } else if (apps.moveTo(page, target)) {
                     if (d.from == "dock") apps.dock.remove(d.key).also { apps.saveDock() }
                     leaveFolder()
