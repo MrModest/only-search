@@ -42,6 +42,7 @@ import java.util.Date
 import java.util.TimeZone
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -204,6 +205,13 @@ internal fun BuiltinWidget(cell: Cell, modifier: Modifier = Modifier, preview: B
         onDispose { context.contentResolver.unregisterContentObserver(observer) }
     }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { if (it) calendarChanges++ }
+    // Access can change outside our prompts (system settings, another app's grant): re-check whenever we come back.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle, granted) {
+        val observer = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_START && hasCalendar(context) != granted) calendarChanges++ }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     if (calendarChanges >= 0 && !hasCalendar(context)) return Column(
         modifier.fillMaxSize().clip(RoundedCornerShape(WidgetCorner)).background(Card.copy(alpha = 0.82f)).border(1.dp, CardLine, RoundedCornerShape(WidgetCorner))
             .then(if (preview) Modifier else Modifier.clickable { askPermission(context, Manifest.permission.READ_CALENDAR, ask) }).padding(horizontal = 14.dp),

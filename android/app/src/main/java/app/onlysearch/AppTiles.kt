@@ -371,7 +371,7 @@ private fun RenameCard(apps: Apps, app: App, modifier: Modifier, onDone: () -> U
     var name by remember { mutableStateOf(app.label) }
     val shape = RoundedCornerShape(22.dp)
     Column(
-        modifier.padding(24.dp).fillMaxWidth().shadow(24.dp, shape).background(PopupBg, shape).border(1.dp, PillLine, shape)
+        modifier.imePadding().padding(24.dp).fillMaxWidth().shadow(24.dp, shape).background(PopupBg, shape).border(1.dp, PillLine, shape)
             .clickable(interactionSource = null, indication = null) {}.padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {

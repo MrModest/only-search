@@ -322,9 +322,9 @@ private fun PersonRow(p: Person, query: String) {
             Text(highlight(p.name, match(p.name, query)?.second), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(p.label, color = Muted, fontSize = 12.sp, maxLines = 1)
         }
-        Box(Modifier.size(40.dp).clip(CircleShape).clickable { go(Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:${p.number}"))) }
+        Box(Modifier.size(40.dp).clip(CircleShape).clickable { go(Intent(Intent.ACTION_DIAL, android.net.Uri.fromParts("tel", p.number, null))) }
             .semantics { contentDescription = "Call ${p.name}" }, contentAlignment = Alignment.Center) { Icon(Ic.phone, null, tint = Fg, modifier = Modifier.size(18.dp)) }
-        Box(Modifier.size(40.dp).clip(CircleShape).clickable { go(Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("smsto:${p.number}"))) }
+        Box(Modifier.size(40.dp).clip(CircleShape).clickable { go(Intent(Intent.ACTION_SENDTO, android.net.Uri.fromParts("smsto", p.number, null))) }
             .semantics { contentDescription = "Message ${p.name}" }, contentAlignment = Alignment.Center) { Icon(Ic.message, null, tint = Fg, modifier = Modifier.size(18.dp)) }
     }
 }

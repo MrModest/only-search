@@ -124,7 +124,7 @@ private fun Hub(apps: Apps, pages: List<Page>, onClose: () -> Unit, onOpen: (Str
     var filter by remember { mutableStateOf("") }
     val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
     val isDefault = remember { isDefaultHome(context) }
-    Column(Modifier.fillMaxSize().background(SettingsBg).systemBarsPadding().imePadding().verticalScroll(rememberScrollState())
+    Column(Modifier.fillMaxSize().background(SettingsBg).imePadding().verticalScroll(rememberScrollState()).systemBarsPadding()
         .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp)) {
         BackButton(onClose, Modifier.offset(x = (-8).dp))
         Text("Settings", fontSize = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em, modifier = Modifier.padding(vertical = 4.dp))
@@ -183,7 +183,7 @@ internal fun BackButton(onClick: () -> Unit, modifier: Modifier = Modifier) =
 
 @Composable
 internal fun SettingsPage(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxSize().background(SettingsBg).systemBarsPadding().verticalScroll(rememberScrollState())
+    Column(Modifier.fillMaxSize().background(SettingsBg).verticalScroll(rememberScrollState()).systemBarsPadding()
         .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp)) {
         Row(Modifier.offset(x = (-8).dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             BackButton(onBack)

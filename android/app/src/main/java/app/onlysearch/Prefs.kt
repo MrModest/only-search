@@ -12,10 +12,11 @@ import kotlin.reflect.KProperty
 /** User settings. Compose-observable; each change is saved to the launcher prefs straight away. */
 class Prefs(context: Context) {
     val sp: SharedPreferences = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
+    private val saved = sp.all // one copy for all the initial reads
 
     private inner class P<T>(private val key: String, def: T, clamp: (T) -> T = { it }) : ReadWriteProperty<Any?, T> {
         @Suppress("UNCHECKED_CAST")
-        private val state = mutableStateOf(clamp((sp.all[key] as? T) ?: def))
+        private val state = mutableStateOf(clamp((saved[key] as? T) ?: def))
         override fun getValue(thisRef: Any?, property: KProperty<*>) = state.value
         override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
             state.value = value
@@ -63,7 +64,7 @@ class Prefs(context: Context) {
 
     // Gestures: actions keyed by gesture ("gDown" → "search", "app:<key>", "shortcut:<key>")
     private val gestureMap = mutableStateMapOf<String, String>().apply {
-        sp.all.forEach { (k, v) -> if (k.startsWith("set.g") && v is String) put(k.removePrefix("set."), v) }
+        saved.forEach { (k, v) -> if (k.startsWith("set.g") && v is String) put(k.removePrefix("set."), v) }
     }
     fun gestureOf(key: String): String? = gestureMap[key]
     fun setGesture(key: String, action: String) { gestureMap[key] = action; sp.edit { putString("set.$key", action) } }
@@ -92,14 +93,14 @@ class Prefs(context: Context) {
 
     // Calendars each built-in agenda widget leaves out, by widget key
     private val hiddenCals = mutableStateMapOf<String, Set<Long>>().apply {
-        sp.all.forEach { (k, v) -> if (k.startsWith("cals:") && v is String) put(k.removePrefix("cals:"), v.split(",").mapNotNull { it.toLongOrNull() }.toSet()) }
+        saved.forEach { (k, v) -> if (k.startsWith("cals:") && v is String) put(k.removePrefix("cals:"), v.split(",").mapNotNull { it.toLongOrNull() }.toSet()) }
     }
     fun hiddenCalendars(key: String) = hiddenCals[key].orEmpty()
     fun setHiddenCalendars(key: String, ids: Set<Long>) { hiddenCals[key] = ids; sp.edit { putString("cals:$key", ids.joinToString(",")) } }
 
     // Per Day widget, by widget key: hours shown before and after the current hour, and the hours of the day it skips
     private fun hourPairs(prefix: String) = mutableStateMapOf<String, Pair<Int, Int>>().apply {
-        sp.all.forEach { (k, v) ->
+        saved.forEach { (k, v) ->
             val (a, b) = (v as? String)?.split(",")?.mapNotNull { it.toIntOrNull() }?.takeIf { k.startsWith(prefix) && it.size == 2 } ?: return@forEach
             put(k.removePrefix(prefix), a to b)
         }

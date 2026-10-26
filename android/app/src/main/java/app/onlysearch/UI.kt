@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,8 +81,8 @@ fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: I
 
     val drawer = remember { Animatable(0f) } // 0 = closed, 1 = open; follows the finger while dragging
     val enter = remember { Animatable(1f) } // home "icons zoom back in" after returning from an app
-    var searching by remember { mutableStateOf(initialQuery != null) }
-    var query by remember { mutableStateOf(initialQuery.orEmpty()) }
+    var searching by rememberSaveable { mutableStateOf(initialQuery != null) }
+    var query by rememberSaveable { mutableStateOf(initialQuery.orEmpty()) }
     var picking by remember { mutableStateOf(false) }
     var pickFor by remember { mutableStateOf<String?>(null) }
     var settings by remember { mutableStateOf<String?>(null) }

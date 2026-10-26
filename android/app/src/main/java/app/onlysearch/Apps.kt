@@ -114,17 +114,18 @@ class Apps(private val context: Context) {
 
     fun byKey(key: String) = all.firstOrNull { it.key == key }
 
-    private class Loaded(val apps: List<Pair<App, android.content.pm.LauncherActivityInfo>>, val icons: Map<String, ImageBitmap>, val mono: Map<String, ImageBitmap>, val packedKeys: Set<String>)
+    private class Loaded(val apps: List<Pair<App, android.content.pm.LauncherActivityInfo>>, val icons: Map<String, ImageBitmap>, val mono: Map<String, ImageBitmap>, val packedKeys: Set<String>, val labels: Map<String, String>)
 
     /** [changed]: packages whose icons must be rendered again (updated, replaced). */
     suspend fun load(changed: Set<String> = emptySet()) {
         if (changed.isNotEmpty()) listOf(icons, monoIcons, packed).forEach { m -> m.keys.removeAll { it.substringBefore('/') in changed } }
         val r = withContext(Dispatchers.Default) {
             val users = context.getSystemService(UserManager::class.java).userProfiles
+            val labels = mutableMapOf<String, String>()
             val apps = users.flatMap { user ->
                 launcher.getActivityList(null, user).map { App(it.label.toString(), it.componentName, user) to it }
             }.filter { it.first.component.packageName != context.packageName }
-                .map { (app, info) -> systemLabels[app.key] = app.label; app.copy(label = sp.getString("label:${app.key}", null) ?: app.label) to info }
+                .map { (app, info) -> labels[app.key] = app.label; app.copy(label = sp.getString("label:${app.key}", null) ?: app.label) to info }
                 .sortedBy { it.first.label.lowercase() }
             val size = (56 * context.resources.displayMetrics.density).toInt()
             val fresh = apps.filter { it.first.key !in icons }
@@ -137,9 +138,11 @@ class Apps(private val context: Context) {
                 fresh.associate { (app, info) -> app.key to (fromPack[app.key] ?: squareIcon(info.getIcon(0), size)) },
                 fresh.mapNotNull { (app, info) -> monoIcon(info.getIcon(0), size)?.let { app.key to it } }.toMap(),
                 fromPack.keys,
+                labels,
             )
         }
         val apps = r.apps
+        systemLabels.clear(); systemLabels.putAll(r.labels)
         r.packedKeys.forEach { packed[it] = true }
         icons.putAll(r.icons)
         monoIcons.putAll(r.mono)
