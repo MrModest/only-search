@@ -55,6 +55,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: 8.11.1 }
 
+      - name: JVM unit tests
+        run: gradle -p android testReleaseUnitTest --no-daemon
+
       - name: Build APKs
         env:
           RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
@@ -129,6 +132,7 @@ jobs:
             adb shell am force-stop app.onlysearch && adb shell am start -W -n app.onlysearch/.MainActivity --es query ca && sleep 6 && adb exec-out screencap -p > out/3-search.png
             adb shell am force-stop app.onlysearch && adb shell am start -W -n app.onlysearch/.MainActivity --es query "'65 kg in pounds'" && sleep 6 && adb exec-out screencap -p > out/4-calc.png
             adb logcat -d -s AndroidRuntime:E | tee out/crash.txt
+            ! grep -q "FATAL EXCEPTION" out/crash.txt
             grep -q "OK (" out/instrument.txt
 
       - uses: actions/upload-artifact@v4
