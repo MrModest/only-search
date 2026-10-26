@@ -5,41 +5,51 @@ Only Search is a home screen app for Android (a "launcher") built around one sea
 **Dark**
 
 <p>
-  <img src="docs/screenshots/home.png" width="200" alt="Home screen, dark">
-  <img src="docs/screenshots/search.png" width="200" alt="Search results, dark">
-  <img src="docs/screenshots/calc.png" width="200" alt="Unit conversion, dark">
-  <img src="docs/screenshots/drawer.png" width="200" alt="App drawer with groups, dark">
+  <img src="docs/screenshots/home.png" width="160" alt="Home screen, dark">
+  <img src="docs/screenshots/search.png" width="160" alt="Search results, dark">
+  <img src="docs/screenshots/calc.png" width="160" alt="Unit conversion, dark">
+  <img src="docs/screenshots/timezone.png" width="160" alt="Time zone conversion, dark">
+  <img src="docs/screenshots/date.png" width="160" alt="Date calculation, dark">
 </p>
 <p>
-  <img src="docs/screenshots/popup.png" width="200" alt="App menu, dark">
-  <img src="docs/screenshots/currency.png" width="200" alt="Currency conversion, dark">
-  <img src="docs/screenshots/edit-home.png" width="200" alt="Edit home pages, dark">
-  <img src="docs/screenshots/settings.png" width="200" alt="Settings, dark">
+  <img src="docs/screenshots/drawer.png" width="160" alt="App drawer with groups, dark">
+  <img src="docs/screenshots/popup.png" width="160" alt="App menu, dark">
+  <img src="docs/screenshots/currency.png" width="160" alt="Currency conversion, dark">
+  <img src="docs/screenshots/edit-home.png" width="160" alt="Edit home pages, dark">
+  <img src="docs/screenshots/settings.png" width="160" alt="Settings, dark">
 </p>
 
 **Light**
 
 <p>
-  <img src="docs/screenshots/home-light.png" width="200" alt="Home screen, light">
-  <img src="docs/screenshots/search-light.png" width="200" alt="Search results, light">
-  <img src="docs/screenshots/calc-light.png" width="200" alt="Unit conversion, light">
-  <img src="docs/screenshots/drawer-light.png" width="200" alt="App drawer with groups, light">
+  <img src="docs/screenshots/home-light.png" width="160" alt="Home screen, light">
+  <img src="docs/screenshots/search-light.png" width="160" alt="Search results, light">
+  <img src="docs/screenshots/calc-light.png" width="160" alt="Unit conversion, light">
+  <img src="docs/screenshots/timezone-light.png" width="160" alt="Time zone conversion, light">
+  <img src="docs/screenshots/date-light.png" width="160" alt="Date calculation, light">
 </p>
 <p>
-  <img src="docs/screenshots/popup-light.png" width="200" alt="App menu, light">
-  <img src="docs/screenshots/currency-light.png" width="200" alt="Currency conversion, light">
-  <img src="docs/screenshots/edit-home-light.png" width="200" alt="Edit home pages, light">
-  <img src="docs/screenshots/settings-light.png" width="200" alt="Settings, light">
+  <img src="docs/screenshots/drawer-light.png" width="160" alt="App drawer with groups, light">
+  <img src="docs/screenshots/popup-light.png" width="160" alt="App menu, light">
+  <img src="docs/screenshots/currency-light.png" width="160" alt="Currency conversion, light">
+  <img src="docs/screenshots/edit-home-light.png" width="160" alt="Edit home pages, light">
+  <img src="docs/screenshots/settings-light.png" width="160" alt="Settings, light">
 </p>
 
-Left to right, top to bottom: home screen, search, a unit conversion, the app drawer, an app's menu, a currency conversion, editing home pages, settings.
+Left to right, top to bottom: home screen, search, a unit conversion, a time zone conversion, a date calculation, the app drawer, an app's menu, a currency conversion, editing home pages, settings.
 
 ## What it can do
 
 **Search and calculate**
 - Find apps, app shortcuts, contacts, phone settings and the web from one box. Press the enter key to open the top result.
-- Type a sum, a percentage or a conversion and the answer appears as you type: `65 kg in pounds`, `20% of 340`, `100 usd in eur`.
-- Currencies, including crypto, use live rates. Dates, times and time zones work too.
+- Type a sum, a percentage or a conversion and the answer appears as you type. A few things to try:
+  - Maths and percentages: `(128*3.5)/4 + 12^2`, `20% of 340`, `$48 + 15% tip`
+  - Units: `65 kg in pounds`, or just `5 ft` and it shows metres. Bare units convert to your home unit system (Settings, Search & calculator, Defaults).
+  - Currencies and crypto, use live rates: `12 USD` shows your home currency, `12 USD in GBP`
+  - Time zones: `12:00 Berlin in Moscow`, `msk time`, `time in Tokyo`
+  - 12 or 24 hour time: `1 pm` shows 13:00 when your phone uses a 24 hour locale
+  - Dates and durations: `today + 1`, `tomorrow + 3 days`, `today + 3 weeks`, `12:00 + 1h 35m`
+  - Decimals: `12.5` and `12,5` both mean 12.5 (a setting, on by default, under Defaults)
 - Past calculations are kept in a history you can open again.
 
 **Home screen**
