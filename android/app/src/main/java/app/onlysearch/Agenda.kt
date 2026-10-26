@@ -39,6 +39,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.window.Dialog
 import java.util.Calendar
 import java.util.Date
+import java.util.TimeZone
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -68,7 +72,39 @@ fun todaysEvents(context: Context): List<Event> {
     val now = System.currentTimeMillis()
     val end = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59) }.timeInMillis
     // All-day instances are stamped in UTC; keep the ones covering today, and timed ones still to come today.
-    return events(context, now - 86_400_000L, end).filter { if (it.allDay) it.end > now - 86_400_000L / 2 else it.end > now && it.begin <= end }
+    return events(context, now - 86_400_000L, end).filter { if (it.allDay) coversToday(it, now) else it.end > now && it.begin <= end }
+}
+
+/** Today's local date as UTC midnight, the way all-day instances are stamped. */
+internal fun todayUtc(now: Long, tz: TimeZone = TimeZone.getDefault()): Long {
+    val local = Calendar.getInstance(tz).apply { timeInMillis = now }
+    return Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        clear(); set(local.get(Calendar.YEAR), local.get(Calendar.MONTH), local.get(Calendar.DAY_OF_MONTH))
+    }.timeInMillis
+}
+
+internal fun coversToday(e: Event, now: Long, tz: TimeZone = TimeZone.getDefault()) = todayUtc(now, tz).let { e.begin <= it && e.end > it }
+
+/** Start of the local hour [back] hours before [now]. */
+internal fun dayStart(now: Long, back: Int, tz: TimeZone = TimeZone.getDefault()): Long =
+    Calendar.getInstance(tz).apply { timeInMillis = now; set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis - back * HourMs
+
+/** Overlapping runs of events split the width into lanes, each event taking the first lane free when it starts. Returns (lane, lane count) per event. */
+internal fun assignLanes(timed: List<Event>): Pair<IntArray, IntArray> {
+    val lane = IntArray(timed.size); val lanes = IntArray(timed.size)
+    var i = 0
+    while (i < timed.size) {
+        val ends = mutableListOf<Long>(); var runEnd = timed[i].end; var j = i
+        while (j < timed.size && (j == i || timed[j].begin < runEnd)) {
+            val e = timed[j]
+            val free = ends.indexOfFirst { it <= e.begin }
+            lane[j] = if (free >= 0) free.also { ends[it] = e.end } else ends.size.also { ends += e.end }
+            runEnd = maxOf(runEnd, e.end); j++
+        }
+        for (k in i until j) lanes[k] = ends.size
+        i = j
+    }
+    return lane to lanes
 }
 
 fun calendars(context: Context): List<CalendarInfo> {
@@ -90,10 +126,13 @@ private var calendarChanges by mutableIntStateOf(0)
 @Composable
 fun rememberEvents(): List<Event> {
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     return produceState(emptyList(), calendarChanges) {
-        while (true) {
-            value = withContext(Dispatchers.IO) { todaysEvents(context) }
-            kotlinx.coroutines.delay(60_000 - System.currentTimeMillis() % 60_000)
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                value = withContext(Dispatchers.IO) { todaysEvents(context) }
+                kotlinx.coroutines.delay(60_000 - System.currentTimeMillis() % 60_000)
+            }
         }
     }.value
 }
@@ -179,7 +218,7 @@ internal fun BuiltinWidget(cell: Cell, modifier: Modifier = Modifier, preview: B
     }
 }
 
-private const val HourMs = 3_600_000L
+internal const val HourMs = 3_600_000L
 
 /**
  * Timed events from [range].first hours before the current hour to [range].second hours after it, each hour the same
@@ -190,12 +229,15 @@ private const val HourMs = 3_600_000L
 private fun DayCard(hidden: Set<Long>, range: Pair<Int, Int>, trim: Pair<Int, Int>?, modifier: Modifier) {
     val hours = range.first + range.second
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val (start, now, all) = produceState(Triple(0L, 0L, emptyList<Event>()), calendarChanges, range) {
-        while (true) {
-            val now = System.currentTimeMillis()
-            val start = now - now % HourMs - range.first * HourMs
-            value = Triple(start, now, withContext(Dispatchers.IO) { events(context, start, start + hours * HourMs) })
-            kotlinx.coroutines.delay(60_000 - System.currentTimeMillis() % 60_000)
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                val now = System.currentTimeMillis()
+                val start = dayStart(now, range.first)
+                value = Triple(start, now, withContext(Dispatchers.IO) { events(context, start, start + hours * HourMs) })
+                kotlinx.coroutines.delay(60_000 - System.currentTimeMillis() % 60_000)
+            }
         }
     }.value
     val timed = all.filter { !it.allDay && it.calendar !in hidden && it.end > start }
@@ -246,20 +288,7 @@ private fun DayCard(hidden: Set<Long>, range: Pair<Int, Int>, trim: Pair<Int, In
                     contentAlignment = Alignment.Center,
                 ) { Text("${(to - f) / HourMs} h skipped", color = Muted, fontSize = 11.sp, maxLines = 1) }
             }
-            // Overlapping runs of events split the width into lanes, each event taking the first lane free when it starts.
-            val lane = IntArray(timed.size); val lanes = IntArray(timed.size)
-            var i = 0
-            while (i < timed.size) {
-                val ends = mutableListOf<Long>(); var runEnd = timed[i].end; var j = i
-                while (j < timed.size && timed[j].begin < runEnd) {
-                    val e = timed[j]
-                    val free = ends.indexOfFirst { it <= e.begin }
-                    lane[j] = if (free >= 0) free.also { ends[it] = e.end } else ends.size.also { ends += e.end }
-                    runEnd = maxOf(runEnd, e.end); j++
-                }
-                for (k in i until j) lanes[k] = ends.size
-                i = j
-            }
+            val (lane, lanes) = assignLanes(timed)
             val width = maxWidth - labelW - 4.dp
             timed.forEachIndexed { k, e ->
                 val top = hour * pos(e.begin.coerceAtLeast(start))
