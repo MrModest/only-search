@@ -415,11 +415,11 @@ class Apps(private val context: Context) {
         return Triple(user.toIntOrNull() ?: return null, pkg, id)
     }
 
-    private val shortcutCache = mutableMapOf<String, Shortcut?>()
+    private val shortcutCache = java.util.Collections.synchronizedMap(mutableMapOf<String, Shortcut?>())
 
     fun pinnedShortcut(key: String): Shortcut? = shortcutCache.getOrPut(key) {
         val (user, pkg, id) = parseShortcut(key) ?: return null
-        val app = all.firstOrNull { it.component.packageName == pkg && it.user.hashCode() == user } ?: return null
+        val app = all.toList().firstOrNull { it.component.packageName == pkg && it.user.hashCode() == user } ?: return null
         if (!launcher.hasShortcutHostPermission()) return null
         val q = LauncherApps.ShortcutQuery().setPackage(pkg).setShortcutIds(listOf(id)).setQueryFlags(
             LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED

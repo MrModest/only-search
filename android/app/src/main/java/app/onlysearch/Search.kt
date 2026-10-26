@@ -85,7 +85,11 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
     // The calculator answer takes the top-hit slot; otherwise the best app match does.
     val top = if (c == null) matches.firstOrNull() else null
     val rest = matches.drop(if (top != null) 1 else 0).map { it.first }.take(8)
-    val shortcuts = remember(top?.first?.key) { top?.let { apps.shortcuts(it.first).take(3) }.orEmpty() }
+    val topApp = top?.first
+    val loadedShortcuts by produceState(topApp?.key to emptyList<Shortcut>(), topApp?.key) {
+        value = topApp?.key to topApp?.let { withContext(Dispatchers.IO) { apps.shortcuts(it).take(3) } }.orEmpty()
+    }
+    val shortcuts = loadedShortcuts.second.takeIf { loadedShortcuts.first == topApp?.key }.orEmpty()
     val copy = { c: Calc ->
         val text = if (prefs.enterCopies == "both") "${c.expression} = ${c.result}" else c.result
         clipboard.setText(AnnotatedString(text)); apps.remember(c.expression, c.result)

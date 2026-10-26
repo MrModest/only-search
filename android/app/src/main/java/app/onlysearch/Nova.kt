@@ -28,7 +28,7 @@ import kotlin.math.roundToInt
  */
 internal suspend fun importNova(context: Context, uri: Uri, apps: Apps): String {
     val dir = File(context.cacheDir, "nova")
-    val novaPrefs = withContext(Dispatchers.IO) {
+    val apply = withContext(Dispatchers.IO) {
         dir.apply { deleteRecursively(); mkdirs() }
         context.contentResolver.openInputStream(uri)!!.use { input ->
             ZipInputStream(input).use { zip ->
@@ -39,27 +39,28 @@ internal suspend fun importNova(context: Context, uri: Uri, apps: Apps): String 
             }
         }
         require(File(dir, "nova.db").exists()) { "Not a Nova backup" }
-        File(dir, "nova.xml").takeIf { it.exists() }?.let(::readPrefsXml).orEmpty()
+        val novaPrefs = File(dir, "nova.xml").takeIf { it.exists() }?.let(::readPrefsXml).orEmpty()
+        try {
+            SQLiteDatabase.openDatabase(File(dir, "nova.db").path, null, SQLiteDatabase.OPEN_READONLY).use { importNova(context, it, novaPrefs, apps) }
+        } finally {
+            dir.deleteRecursively()
+        }
     }
-    val dbFile = File(dir, "nova.db")
-    val db = SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY)
-    try {
-        return db.use { importNova(context, it, novaPrefs, apps) }
-    } finally {
-        dir.deleteRecursively()
-    }
+    return apply()
 }
 
 private class NovaItem(val id: Long, val title: String, val intent: String?, val container: Long, val screen: Int,
                        val x: Double, val y: Double, val w: Double, val h: Double, val type: Int, val provider: String?, val profile: Int)
 
-private fun importNova(context: Context, db: SQLiteDatabase, novaPrefs: Map<String, String>, apps: Apps): String {
+/** Reads the backup and writes the layout prefs (off the main thread); returns what sets the observable settings, to run on main. */
+private fun importNova(context: Context, db: SQLiteDatabase, novaPrefs: Map<String, String>, apps: Apps): () -> String {
+    val all = apps.all.toList()
     val me = Process.myUserHandle().hashCode()
     // Nova stores the main profile as -1.
     fun userOf(profile: Int) = if (profile < 0) me else profile
     fun keyOf(cn: ComponentName?, pkg: String?, profile: Int): String? {
         val p = cn?.packageName ?: pkg ?: return null
-        val ofPkg = apps.all.filter { it.component.packageName == p }
+        val ofPkg = all.filter { it.component.packageName == p }
         val user = userOf(profile)
         return (ofPkg.firstOrNull { it.component == cn && it.user.hashCode() == user } ?: ofPkg.firstOrNull { it.component == cn }
             ?: ofPkg.firstOrNull { it.user.hashCode() == user } ?: ofPkg.firstOrNull())?.key
@@ -152,28 +153,32 @@ private fun importNova(context: Context, db: SQLiteDatabase, novaPrefs: Map<Stri
         putBoolean("builtins", true)
         putBoolean("seeded", true)
     }
-    prefs.columns = (cols * f).coerceIn(3, MaxColumns)
-    prefs.rows = (rows * f).coerceIn(1, MaxRows)
-    prefs.appSpan = f
-    novaPrefs["dock_grid_cols"]?.toIntOrNull()?.let { prefs.dockSize = it.coerceIn(3, 6) }
-    novaPrefs["dock_enable"]?.let { prefs.showDock = it == "true" }
-    novaPrefs["searchbar_placement"]?.let { prefs.searchBar = when { it.startsWith("DOCK_ABOVE") -> "above"; it.startsWith("DOCK_BELOW") -> "bottom"; it.contains("TOP") -> "top"; else -> prefs.searchBar } }
-    novaPrefs["adaptive_icon_shape"]?.let { prefs.iconShape = when (it) { "CIRCLE" -> "circle"; "SQUARE", "ROUNDED_SQUARE" -> "square"; "TEARDROP" -> "teardrop"; else -> "squircle" } }
-    // "1.25:true:13.0:…" = icon scale : show labels : …
-    novaPrefs["desktop_cellspecs"]?.split(":")?.let { s ->
-        // Nova's 100% icon is ~42 dp, ours 58 dp: 125% in Nova ≈ 90% here.
-        s.getOrNull(0)?.toFloatOrNull()?.let { prefs.iconSize = (it * 42 / 58 * 100 / 5).roundToInt().times(5).coerceIn(70, 130) }
-        s.getOrNull(1)?.let { prefs.labels = it == "true" }
-    }
-    novaPrefs["drawer_grid"]?.let { Regex("\\d+x(\\d+)").find(it)?.groupValues?.get(1)?.toIntOrNull() }?.let { prefs.drawerColumns = it.coerceIn(3, 6) }
     // "Exported Icon Pack:GO:ginlemon.iconpackstudio.exported:false" = name : type : package : …
-    novaPrefs["theme_icon_pack"]?.split(":")?.getOrNull(2)?.takeIf { p -> iconPacks(context).any { it.first == p } }?.let { prefs.iconPack = it }
-    novaPrefs["drawer_predictive_apps"]?.let { prefs.suggested = it == "true" }
-    mapOf("gesture_swipe_up" to "gUp", "gesture_swipe_down" to "gDown", "gesture_two_finger_scroll_down" to "gTwoDown",
-        "gesture_double_tap" to "gDoubleTap", "gesture_pinch" to "gPinch").forEach { (nova, ours) ->
-        novaPrefs[nova]?.let { novaAction(it) { intent -> keyOfIntent(intent, -1) } }?.let { prefs.setGesture(ours, it) }
+    val iconPack = novaPrefs["theme_icon_pack"]?.split(":")?.getOrNull(2)?.takeIf { p -> iconPacks(context).any { it.first == p } }
+    val gestures = mapOf("gesture_swipe_up" to "gUp", "gesture_swipe_down" to "gDown", "gesture_two_finger_scroll_down" to "gTwoDown",
+        "gesture_double_tap" to "gDoubleTap", "gesture_pinch" to "gPinch").mapNotNull { (nova, ours) ->
+        novaPrefs[nova]?.let { novaAction(it) { intent -> keyOfIntent(intent, -1) } }?.let { ours to it }
     }
-    return "Imported ${pages.size} pages, ${dock.size} dock apps, ${folders.size} folders, ${groups.length()} groups, ${widgetQueue.length()} widgets"
+    return {
+        prefs.columns = (cols * f).coerceIn(3, MaxColumns)
+        prefs.rows = (rows * f).coerceIn(1, MaxRows)
+        prefs.appSpan = f
+        novaPrefs["dock_grid_cols"]?.toIntOrNull()?.let { prefs.dockSize = it.coerceIn(3, 6) }
+        novaPrefs["dock_enable"]?.let { prefs.showDock = it == "true" }
+        novaPrefs["searchbar_placement"]?.let { prefs.searchBar = when { it.startsWith("DOCK_ABOVE") -> "above"; it.startsWith("DOCK_BELOW") -> "bottom"; it.contains("TOP") -> "top"; else -> prefs.searchBar } }
+        novaPrefs["adaptive_icon_shape"]?.let { prefs.iconShape = when (it) { "CIRCLE" -> "circle"; "SQUARE", "ROUNDED_SQUARE" -> "square"; "TEARDROP" -> "teardrop"; else -> "squircle" } }
+        // "1.25:true:13.0:…" = icon scale : show labels : …
+        novaPrefs["desktop_cellspecs"]?.split(":")?.let { s ->
+            // Nova's 100% icon is ~42 dp, ours 58 dp: 125% in Nova ≈ 90% here.
+            s.getOrNull(0)?.toFloatOrNull()?.let { prefs.iconSize = (it * 42 / 58 * 100 / 5).roundToInt().times(5).coerceIn(70, 130) }
+            s.getOrNull(1)?.let { prefs.labels = it == "true" }
+        }
+        novaPrefs["drawer_grid"]?.let { Regex("\\d+x(\\d+)").find(it)?.groupValues?.get(1)?.toIntOrNull() }?.let { prefs.drawerColumns = it.coerceIn(3, 6) }
+        iconPack?.let { prefs.iconPack = it }
+        novaPrefs["drawer_predictive_apps"]?.let { prefs.suggested = it == "true" }
+        gestures.forEach { (ours, action) -> prefs.setGesture(ours, action) }
+        "Imported ${pages.size} pages, ${dock.size} dock apps, ${folders.size} folders, ${groups.length()} groups, ${widgetQueue.length()} widgets"
+    }
 }
 
 /** "Label$#Intent;…" → one of our gesture actions, or null when there's no counterpart (e.g. Recent apps). */

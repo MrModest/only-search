@@ -673,9 +673,11 @@ private fun BackupSettings(apps: Apps) {
             confirmButton = {
                 Text("Restore", color = Accent, fontSize = 15.sp, modifier = Modifier.clip(CircleShape).clickable {
                     restoring = null
-                    runCatching { restoreJson(json) }
-                        .onSuccess { restart(context) }
-                        .onFailure { android.widget.Toast.makeText(context, "Not a valid backup file", android.widget.Toast.LENGTH_LONG).show() }
+                    scope.launch {
+                        runCatching { withContext(Dispatchers.IO) { restoreJson(json) } }
+                            .onSuccess { restart(context) }
+                            .onFailure { android.widget.Toast.makeText(context, "Not a valid backup file", android.widget.Toast.LENGTH_LONG).show() }
+                    }
                 }.padding(12.dp))
             },
             dismissButton = { Text("Cancel", color = Muted, fontSize = 15.sp, modifier = Modifier.clip(CircleShape).clickable { restoring = null }.padding(12.dp)) },

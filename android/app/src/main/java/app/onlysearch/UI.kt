@@ -210,7 +210,7 @@ fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: I
             }
             d.from == "picker" -> if (target != null && apps.fits(page, target.x, target.y, target.w, target.h)) {
                 if (d.key.startsWith("pb:")) apps.addBuiltin(d.key.removePrefix("pb:"), page to target)
-                else widgets.providers().firstOrNull { pickerKey(it) == d.key }?.let { apps.widgetSpot = page to target; apps.currentPage = page; widgets.add(it) }
+                else widgets.manager.installedProviders.firstOrNull { pickerKey(it) == d.key }?.let { apps.widgetSpot = page to target; apps.currentPage = page; widgets.add(it) }
             }
             apps.byKey(d.key) != null && dnd.dock.contains(at) -> {
                 if (apps.dropOnDock(d.key, ((at.x - dnd.dock.left) / (dnd.dock.width / prefs.dockSize)).toInt())) leaveFolder()

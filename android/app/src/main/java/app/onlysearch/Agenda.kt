@@ -317,7 +317,7 @@ private fun DayCard(hidden: Set<Long>, range: Pair<Int, Int>, trim: Pair<Int, In
 @Composable
 internal fun CalendarPicker(key: String, onClose: () -> Unit) {
     val context = LocalContext.current
-    val all = remember { calendars(context) }
+    val all by produceState<List<CalendarInfo>?>(null) { value = withContext(Dispatchers.IO) { calendars(context) } }
     Dialog(onClose) {
         ProvideTextStyle(TextStyle(fontFamily = Sans, color = Fg)) {
             Column(Modifier.clip(RoundedCornerShape(22.dp)).background(PopupBg).border(1.dp, PillLine, RoundedCornerShape(22.dp)).padding(vertical = 18.dp)) {
@@ -339,9 +339,9 @@ internal fun CalendarPicker(key: String, onClose: () -> Unit) {
                     }
                 }
                 Text("Calendars", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 20.dp))
-                if (all.isEmpty()) Text("No calendars on this phone, or no calendar access.", color = Muted, fontSize = 14.sp, modifier = Modifier.padding(20.dp))
+                if (all?.isEmpty() == true) Text("No calendars on this phone, or no calendar access.", color = Muted, fontSize = 14.sp, modifier = Modifier.padding(20.dp))
                 Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
-                    all.forEach { cal ->
+                    all.orEmpty().forEach { cal ->
                         val on = cal.id !in prefs.hiddenCalendars(key)
                         Row(
                             Modifier.fillMaxWidth().clickable {

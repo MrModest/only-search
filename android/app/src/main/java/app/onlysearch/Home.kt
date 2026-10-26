@@ -74,6 +74,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.Date
 import kotlin.math.roundToInt
 
@@ -374,13 +376,17 @@ internal fun WidgetPicker(apps: Apps, widgets: Widgets, only: String?, onClose: 
     val context = LocalContext.current
     val pm = context.packageManager
     val density = context.resources.displayMetrics.density
-    val groups = remember {
-        widgets.providers().filter { only == null || it.provider.packageName == only }.groupBy { it.provider.packageName }.map { (pkg, list) ->
-            Triple(pkg, runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg), list)
-        }.sortedBy { it.second.lowercase() }
-    }
+    var groups by remember { mutableStateOf(emptyList<Triple<String, String, List<AppWidgetProviderInfo>>>()) }
     var filter by remember { mutableStateOf("") }
-    var open by remember { mutableStateOf(groups.firstOrNull()?.first) }
+    var open by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        groups = withContext(Dispatchers.IO) {
+            widgets.providers().filter { only == null || it.provider.packageName == only }.groupBy { it.provider.packageName }.map { (pkg, list) ->
+                Triple(pkg, runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg), list)
+            }.sortedBy { it.second.lowercase() }
+        }
+        open = groups.firstOrNull()?.first
+    }
     // While a preview is dragged onto home the sheet stays composed (it owns the gesture) but invisible.
     var dragging by remember { mutableStateOf(false) }
     val shown = groups.mapNotNull { (pkg, label, list) ->
@@ -471,12 +477,14 @@ internal fun cells(p: AppWidgetProviderInfo, density: Float): Pair<Int, Int> {
 internal fun WidgetPreview(apps: Apps, p: AppWidgetProviderInfo, modifier: Modifier, onDragging: () -> Unit, onDropped: () -> Unit, onClick: () -> Unit) {
     val context = LocalContext.current
     val density = context.resources.displayMetrics
-    val preview = remember(p) {
-        runCatching { (p.loadPreviewImage(context, density.densityDpi) ?: p.loadIcon(context, density.densityDpi))?.toBitmap()?.asImageBitmap() }.getOrNull()
+    val preview by produceState<ImageBitmap?>(null, p) {
+        value = withContext(Dispatchers.IO) {
+            runCatching { (p.loadPreviewImage(context, density.densityDpi) ?: p.loadIcon(context, density.densityDpi))?.toBitmap()?.asImageBitmap() }.getOrNull()
+        }
     }
     val (w, h) = cells(p, density.density)
     WidgetPreview(apps, pickerKey(p), p.loadLabel(context.packageManager), w, h, preview, modifier, onDragging, onDropped, onClick) {
-        if (preview != null) Image(preview, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        preview?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
     }
 }
 
@@ -492,7 +500,7 @@ internal fun WidgetPreview(
     Column(
         modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Sheet).onGloballyPositioned { coords[0] = it }
             .semantics { onClick { onClick(); true } }
-            .pointerInput(key) {
+            .pointerInput(key, preview) {
                 tapHoldDrag(
                     { coords[0] }, onTap = onClick, onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
                     onDragStart = { _, at ->

@@ -66,7 +66,9 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.graphics.drawable.toBitmap
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -145,8 +147,11 @@ internal fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifie
 /** A pinned app shortcut on the home grid: its icon with a small app badge. Tap opens it; hold and drag moves it. */
 @Composable
 internal fun ShortcutTile(apps: Apps, key: String, labelColor: Color?, size: Dp) {
-    val s = remember(key, apps.all.size) { apps.pinnedShortcut(key) }
-    val icon = remember(s) { s?.let(apps::shortcutIcon) }
+    val loaded by produceState<Pair<Shortcut?, ImageBitmap?>?>(null, key, apps.all.size) {
+        value = withContext(Dispatchers.IO) { apps.pinnedShortcut(key).let { it to it?.let(apps::shortcutIcon) } }
+    }
+    val s = loaded?.first
+    val icon = loaded?.second
     val haptic = LocalHapticFeedback.current
     val dnd = LocalDragDrop.current
     val (track, source) = rememberLaunchSource()
@@ -157,7 +162,7 @@ internal fun ShortcutTile(apps: Apps, key: String, labelColor: Color?, size: Dp)
     Column(
         Modifier.fillMaxWidth().onGloballyPositioned { coords[0] = it }.graphicsLayer { alpha = if (lifted) 0.25f else 1f }
             .semantics { onClick { s?.let { apps.launch(it, source()) }; true } }
-            .pointerInput(key, prefs.lockLayout) {
+            .pointerInput(key, prefs.lockLayout, loaded) {
                 tapHoldDrag(
                     { coords[0] }, onTap = { s?.let { apps.launch(it, source()) } },
                     onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); menu = true },
@@ -177,7 +182,7 @@ internal fun ShortcutTile(apps: Apps, key: String, labelColor: Color?, size: Dp)
             else Box(Modifier.fillMaxSize().clip(shape).background(Tile).border(1.dp, TileLine, shape))
             s?.app?.let { AppIcon(apps, it, size * 0.4f, Modifier.align(Alignment.BottomEnd).offset(4.dp, 4.dp)) }
         }
-        if (labelColor != null) Text(s?.label ?: "Unavailable", color = labelColor, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        if (labelColor != null) Text(s?.label ?: if (loaded == null) "" else "Unavailable", color = labelColor, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             style = shadowed(), modifier = Modifier.padding(top = 7.dp, start = 2.dp, end = 2.dp))
     }
     DropdownMenu(menu, { menu = false }, shape = RoundedCornerShape(16.dp), containerColor = PopupBg) {
@@ -239,12 +244,17 @@ internal fun AppPopup(apps: Apps, app: App, anchor: Rect, hint: Boolean, onRemov
     val dnd = LocalDragDrop.current
     val pickWidgets = LocalPickWidgets.current
     val density = LocalDensity.current
-    val shortcuts = remember(app) { apps.shortcuts(app).take(4).map { it to apps.shortcutIcon(it) } }
-    val hasWidgets = remember(app) {
-        runCatching { AppWidgetManager.getInstance(context).getInstalledProvidersForPackage(app.component.packageName, app.user).isNotEmpty() }.getOrDefault(false)
+    // The menu fades in once its shortcuts are in, so the card doesn't jump.
+    val loaded by produceState<Pair<List<Pair<Shortcut, ImageBitmap?>>, Boolean>?>(null, app) {
+        value = withContext(Dispatchers.IO) {
+            apps.shortcuts(app).take(4).map { it to apps.shortcutIcon(it) } to
+                runCatching { AppWidgetManager.getInstance(context).getInstalledProvidersForPackage(app.component.packageName, app.user).isNotEmpty() }.getOrDefault(false)
+        }
     }
+    val shortcuts = loaded?.first.orEmpty()
+    val hasWidgets = loaded?.second == true
     val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)) }
+    LaunchedEffect(loaded != null) { if (loaded != null) appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)) }
     var dragging by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(22.dp)
