@@ -22,6 +22,12 @@ class SoulverTest {
         "\$25/hour * 14 hours of work" to "350",
         "100 USD in EUR" to "",
         "today + 3 weeks" to "",
+        // Home-unit conversions as Search builds them (homeQuery).
+        "5 ft in m" to "1.52 m",
+        "5 ft 10 in in m" to "1.78 m",
+        "10 lb in kg" to "4.54 kg",
+        "3 km in mi" to "1.86 mi",
+        "70 F in celsius" to "21.11",
     )
 
     @Test

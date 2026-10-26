@@ -89,7 +89,7 @@ fun SettingsScreen(apps: Apps, start: String, onClose: () -> Unit) {
 
 private fun settingsPages(apps: Apps): List<Page> = listOf(
     Page("search", "Search", SIc.calc, true, "Search & calculator", { "Math, units, currency, time zones" },
-        "calculator math units currency rates dates time zones finance natural language compute time home currency unit system metric imperial") { CalcSettings() },
+        "calculator math units currency rates dates time zones finance natural language compute time home currency unit system metric imperial decimal point comma dot") { CalcSettings() },
     Page("sources", "Search", SIc.sources, true, "Sources & ranking",
         { (listOf("Apps") + listOfNotNull("contacts".takeIf { prefs.srcContacts }, "settings".takeIf { prefs.srcSettings }, "web".takeIf { prefs.srcWeb })).joinToString(", ") },
         "contacts people settings web engine google duckduckgo fuzzy frequent ranking") { SourcesSettings() },
@@ -470,6 +470,7 @@ private fun CalcSettings() {
                     scope.launch { Soulver.setUnitSystem(it) }
                 }
             },
+            { SwitchRow("Dot and comma are both decimal points", "12.5 = 12,5 · no thousands separators", prefs.anyDecimal, monoSubtitle = true) { prefs.anyDecimal = it } },
             {
                 ValueMenu("↵ on a result", if (prefs.enterCopies == "both") "Copy expression = answer" else "Copy answer",
                     listOf("answer" to "Copy answer", "both" to "Copy expression = answer"), prefs.enterCopies) { prefs.enterCopies = it }

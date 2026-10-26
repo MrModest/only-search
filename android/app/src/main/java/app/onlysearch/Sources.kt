@@ -172,9 +172,27 @@ fun calcAllowed(q: String): Boolean = calcKinds(q).all {
     }
 }
 
-/** A currency amount with no target ("100 USD", "$20 + 5%"): also show it in the home currency. */
-fun homeCurrencyQuery(q: String): String? {
-    if (!CurrencyRx.containsMatchIn(q) || Regex("""\b(in|to|as)\b""", RegexOption.IGNORE_CASE).containsMatchIn(q)) return null
-    if (q.contains(prefs.homeCurrency, ignoreCase = true)) return null
-    return "$q in ${prefs.homeCurrency}"
+private val TargetRx = Regex("""\b(in|to|as|into)\s+[\p{L}$€£¥°]""", RegexOption.IGNORE_CASE)
+private val UnitTokenRx = Regex("""\d\s*(km/h|kph|mph|km|cm|mm|m|mi|miles?|ft|feet|foot|in|inch(es)?|yd|yards?|kg|g|lbs?|oz|ounces?|st|stones?|l|liters?|litres?|gal|gallons?|°?c|°?f|celsius|fahrenheit)\b""", RegexOption.IGNORE_CASE)
+private val Metric = mapOf("km" to "mi", "m" to "ft", "cm" to "inches", "mm" to "inches", "kg" to "lb", "g" to "oz", "l" to "gal", "c" to "fahrenheit", "km/h" to "mph")
+private val Imperial = mapOf("mi" to "km", "ft" to "m", "in" to "cm", "yd" to "m", "lb" to "kg", "oz" to "g", "st" to "kg", "gal" to "L", "f" to "celsius", "mph" to "km/h")
+private val Aliases = mapOf("kph" to "km/h", "miles" to "mi", "mile" to "mi", "feet" to "ft", "foot" to "ft", "inch" to "in", "inches" to "in", "yard" to "yd", "yards" to "yd",
+    "lbs" to "lb", "ounce" to "oz", "ounces" to "oz", "stone" to "st", "stones" to "st", "liter" to "l", "liters" to "l", "litre" to "l", "litres" to "l",
+    "gallon" to "gal", "gallons" to "gal", "°c" to "c", "celsius" to "c", "°f" to "f", "fahrenheit" to "f")
+
+/**
+ * [q] converted to the home currency or unit system ("12 USD" → "12 USD in EUR", "5 ft" → "5 ft in m" when metric),
+ * or null when it names its own target or has nothing to convert. Units follow the first one in the query.
+ */
+fun homeQuery(q: String, currency: String, system: String): String? {
+    if (TargetRx.containsMatchIn(q)) return null
+    if (CurrencyRx.containsMatchIn(q)) return "$q in $currency"
+    // "4h 10m" is a duration, not metres.
+    if (DateRx.containsMatchIn(q.replace(Regex("""\d\s*m\b"""), ""))) return null
+    val unit = UnitTokenRx.find(q)?.groupValues?.get(1)?.lowercase()?.let { Aliases[it] ?: it } ?: return null
+    return (if (system == "metric") Imperial[unit] else Metric[unit])?.let { "$q in $it" }
 }
+
+/** "12.5" and "12,5" both as a decimal number, written with the locale's decimal point. "26.10.2026" or "1,000,000" stay as they are. */
+fun anyDecimal(q: String, point: Char = java.text.DecimalFormatSymbols.getInstance().decimalSeparator): String =
+    Regex("""(?<![\d.,])(\d+)[.,](\d+)(?![.,]?\d)""").replace(q) { "${it.groupValues[1]}$point${it.groupValues[2]}" }

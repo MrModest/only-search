@@ -53,6 +53,7 @@ class Prefs(context: Context) {
     var homeCurrency by P("set.homeCurrency", runCatching { java.util.Currency.getInstance(java.util.Locale.getDefault()).currencyCode }.getOrDefault("USD"))
     var unitSystem by P("set.unitSystem", when (java.util.Locale.getDefault().country) { "US", "LR", "MM" -> "customaryUS"; "GB" -> "imperial"; else -> "metric" })
     var enterCopies by P("set.enterCopies", "answer")
+    var anyDecimal by P("set.anyDecimal", true)
 
     // Sources & ranking
     var srcContacts by P("set.srcContacts", true)

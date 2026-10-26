@@ -53,7 +53,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-internal data class Calc(val expression: String, val result: String, val micros: Long, val home: String? = null)
+internal data class Calc(val expression: String, val result: String, val micros: Long)
 
 internal val Examples = listOf("20% of 450", "5 km in mi", "time in Tokyo", "\$48 + 15% tip", "3:45pm + 4h 10m", "sqrt(2)^8")
 
@@ -66,11 +66,12 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
         snapshotFlow { currentQuery }.collectLatest { q ->
             if (q.isBlank()) { calc = null; return@collectLatest }
             val t0 = System.nanoTime()
-            val r = Soulver.evaluate(q)
+            val expr = if (prefs.anyDecimal) anyDecimal(q.trim()) else q.trim()
+            // A bare amount shows in the home currency or unit system; when that fails to evaluate, as typed.
+            val r = homeQuery(expr, prefs.homeCurrency, prefs.unitSystem)?.let { Soulver.evaluate(it) }?.takeIf { it.isNotBlank() } ?: Soulver.evaluate(expr)
             val us = (System.nanoTime() - t0) / 1000
             // Hidden when the query is a kind the user switched off in Settings › Search & calculator.
-            calc = if (r.isBlank() || r == q.trim() || !calcAllowed(q)) null
-            else Calc(q.trim(), r, us, homeCurrencyQuery(q.trim())?.let { Soulver.evaluate(it) }?.takeIf { it.isNotBlank() && it != r })
+            calc = if (r.isBlank() || r == q.trim() || !calcAllowed(q)) null else Calc(q.trim(), r, us)
         }
     }
     // A copy only when the list changes; an unchanged one compares by identity.
@@ -361,7 +362,6 @@ internal fun CalcCard(c: Calc, onCopy: () -> Unit) {
         val big = c.result.length <= 13
         Text(c.result, color = Accent, fontSize = if (big) 40.sp else 26.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.03).em,
             lineHeight = if (big) 46.sp else 31.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
-        if (c.home != null) Text("≈ ${c.home}", color = Muted, fontSize = 15.sp, fontFamily = Mono, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
     }
 }
 
