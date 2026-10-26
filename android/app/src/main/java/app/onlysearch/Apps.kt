@@ -62,6 +62,28 @@ data class AppGroup(val name: String, val apps: List<String>)
 data class Shortcut(val label: String, val app: App, val info: ShortcutInfo)
 
 /** Installed apps, icons, and the user's pins / launch counts. All state is Compose-observable. */
+internal fun parsePages(json: String): List<HomePage> {
+    val arr = JSONArray(json)
+    return (0 until arr.length()).map { i ->
+        val items = arr.getJSONObject(i).getJSONArray("items")
+        HomePage((0 until items.length()).map { j ->
+            items.getJSONObject(j).run { Cell(getString("k"), getInt("x"), getInt("y"), getInt("w"), getInt("h")) }
+        })
+    }.ifEmpty { listOf(HomePage()) }
+}
+
+internal fun parseGroups(json: String): List<AppGroup> {
+    val arr = JSONArray(json)
+    return (0 until arr.length()).map { i ->
+        arr.getJSONObject(i).run { val a = getJSONArray("apps"); AppGroup(getString("name"), (0 until a.length()).map(a::getString)) }
+    }
+}
+
+internal fun parseFolders(json: String): Map<String, Folder> {
+    val o = JSONObject(json)
+    return o.keys().asSequence().associateWith { k -> val f = o.getJSONObject(k); val a = f.getJSONArray("apps"); Folder(f.getString("name"), (0 until a.length()).map(a::getString)) }
+}
+
 class Apps(private val context: Context) {
     private val launcher = context.getSystemService(LauncherApps::class.java)
     private val sp = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
@@ -85,16 +107,8 @@ class Apps(private val context: Context) {
     /** Apps shown in the drawer and search: everything not hidden. */
     val visible get() = all.filter { it.key !in hidden }
     private val systemLabels = mutableMapOf<String, String>()
-    val groups = mutableStateListOf<AppGroup>().apply {
-        val arr = JSONArray(sp.getString("groups", "[]"))
-        addAll((0 until arr.length()).map { i ->
-            arr.getJSONObject(i).run { val a = getJSONArray("apps"); AppGroup(getString("name"), (0 until a.length()).map(a::getString)) }
-        })
-    }
-    val folders = mutableStateMapOf<String, Folder>().apply {
-        val o = JSONObject(sp.getString("folders", "{}")!!)
-        o.keys().forEach { k -> val f = o.getJSONObject(k); val a = f.getJSONArray("apps"); put(k, Folder(f.getString("name"), (0 until a.length()).map(a::getString))) }
-    }
+    val groups = mutableStateListOf<AppGroup>().apply { addAll(parseGroups(sp.getString("groups", "[]")!!)) }
+    val folders = mutableStateMapOf<String, Folder>().apply { putAll(parseFolders(sp.getString("folders", "{}")!!)) }
     private val counts = mutableStateMapOf<String, Int>()
     val loaded = mutableStateOf(false)
 
@@ -277,13 +291,7 @@ class Apps(private val context: Context) {
                 .take(top / 2).mapIndexed { i, id -> Cell("w:$id", 0, i * 2, cols, 2) }
             return listOf(HomePage(widgets + apps.mapIndexed { i, k -> Cell(k, i % cols, top + i / cols) }))
         }
-        val arr = JSONArray(json)
-        return (0 until arr.length()).map { i ->
-            val items = arr.getJSONObject(i).getJSONArray("items")
-            HomePage((0 until items.length()).map { j ->
-                items.getJSONObject(j).run { Cell(getString("k"), getInt("x"), getInt("y"), getInt("w"), getInt("h")) }
-            })
-        }.ifEmpty { listOf(HomePage()) }
+        return parsePages(json)
     }
 
     fun toggleDock(app: App) = toggle(dock, "dock", app, prefs.dockSize)

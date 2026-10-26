@@ -55,9 +55,9 @@ import kotlin.reflect.KProperty
 class Prefs(context: Context) {
     val sp: SharedPreferences = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
 
-    private inner class P<T>(private val key: String, def: T) : ReadWriteProperty<Any?, T> {
+    private inner class P<T>(private val key: String, def: T, clamp: (T) -> T = { it }) : ReadWriteProperty<Any?, T> {
         @Suppress("UNCHECKED_CAST")
-        private val state = mutableStateOf((sp.all[key] as? T) ?: def)
+        private val state = mutableStateOf(clamp((sp.all[key] as? T) ?: def))
         override fun getValue(thisRef: Any?, property: KProperty<*>) = state.value
         override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
             state.value = value
@@ -72,8 +72,8 @@ class Prefs(context: Context) {
     }
 
     // Home screen
-    var columns by P("set.columns", 4)
-    var rows by P("set.rows", 6)
+    var columns by P("set.columns", 4) { it.coerceIn(3, MaxColumns) }
+    var rows by P("set.rows", 6) { it.coerceIn(1, MaxRows) }
     var iconSize by P("set.iconSize", 100)
     var iconShape by P("set.iconShape", "squircle")
     var labels by P("set.labels", true)
@@ -760,16 +760,21 @@ internal fun restoreJson(json: String) {
     val root = org.json.JSONObject(json)
     require(root.optString("app") == "only-search") { "Not an Only Search backup" }
     val data = root.getJSONObject("prefs")
-    prefs.sp.edit(commit = true) {
-        clear()
-        data.keys().forEach { k ->
-            val e = data.getJSONObject(k)
-            when (e.getString("t")) {
-                "s" -> putString(k, e.getString("v")); "i" -> putInt(k, e.getInt("v")); "l" -> putLong(k, e.getLong("v"))
-                "b" -> putBoolean(k, e.getBoolean("v")); "f" -> putFloat(k, e.getDouble("v").toFloat())
-            }
+    val entries = data.keys().asSequence().associateWith { data.getJSONObject(it) }
+    val writes = entries.map { (k, e) ->
+        when (e.getString("t")) {
+            "s" -> e.getString("v").let { v -> { ed: SharedPreferences.Editor -> ed.putString(k, v) } }
+            "i" -> e.getInt("v").let { v -> { ed: SharedPreferences.Editor -> ed.putInt(k, v) } }
+            "l" -> e.getLong("v").let { v -> { ed: SharedPreferences.Editor -> ed.putLong(k, v) } }
+            "b" -> e.getBoolean("v").let { v -> { ed: SharedPreferences.Editor -> ed.putBoolean(k, v) } }
+            "f" -> e.getDouble("v").toFloat().let { v -> { ed: SharedPreferences.Editor -> ed.putFloat(k, v) } }
+            else -> throw IllegalArgumentException("Unknown value type")
         }
     }
+    entries["pages"]?.let { parsePages(it.getString("v")) }
+    entries["folders"]?.let { parseFolders(it.getString("v")) }
+    entries["groups"]?.let { parseGroups(it.getString("v")) }
+    prefs.sp.edit(commit = true) { clear(); writes.forEach { it(this) } }
 }
 
 @Composable
