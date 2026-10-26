@@ -21,7 +21,6 @@ class SoulverTest {
         "\$10 for lunch + 15% tip" to "11.5",
         "\$25/hour * 14 hours of work" to "350",
         "100 USD in EUR" to "",
-        "0.5 BTC in USD" to "",
         "today + 3 weeks" to "",
     )
 
@@ -37,6 +36,7 @@ class SoulverTest {
             Log.i(TAG, "%-45s => %-28s %.2f ms".format(expr, r, (System.nanoTime() - t0) / 1e6))
             if (r.isBlank() || !r.contains(expect)) failures += "$expr => '$r'"
         }
+        Soulver.evalBlocking("0.5 BTC in USD").let { if (it.isNotBlank()) failures += "no BTC rate yet: 0.5 BTC in USD => '$it' (want blank)" }
         // Our rate provider: fixed rates in, conversions out (live ones are fetched by the app, not here).
         Soulver.setRatesBlocking("USD=1;EUR=0.5;BTC=0.00001;ETH=0.0004")
         listOf("100 USD in EUR" to "50", "0.5 BTC in USD" to "50,000", "1 ETH in EUR" to "1,250", "1000 USD in BTC" to "0.01", "0.5 btc in usd" to "50,000", "2 bitcoin in usd" to "200").forEach { (expr, expect) ->

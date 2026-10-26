@@ -28,7 +28,10 @@ object Soulver {
 
     /** Recent rate requests from the engine (diagnostics for SoulverTest). */
     fun rateLogBlocking(): String = runCatching { nativeRateLog() }.getOrDefault("")
-    fun setRatesBlocking(rates: String) { if (ready) runCatching { nativeSetRates(rates) } }
+    @Volatile private var appliedRates: String? = null
+    fun setRatesBlocking(rates: String) {
+        if (ready && rates != appliedRates) runCatching { nativeSetRates(rates) }.onSuccess { appliedRates = rates }
+    }
 
     /** Blocking; call off the main thread or through [evaluate]. */
     fun initBlocking(context: Context): Boolean {
@@ -53,7 +56,7 @@ object Soulver {
     // A bridge library older than these calls (e.g. a local build with CI-extracted libs) just keeps the defaults.
     suspend fun setUnitSystem(system: String) = withContext(thread) { if (ready) runCatching { nativeSetUnitSystem(system) } }
 
-    suspend fun setRates(rates: String) = withContext(thread) { if (ready) runCatching { nativeSetRates(rates) } }
+    suspend fun setRates(rates: String) = withContext(thread) { setRatesBlocking(rates) }
 
     /**
      * Live fiat (open.er-api.com) and crypto (CoinGecko) rates, refetched when older than 6 h. The last good set is kept,
@@ -63,9 +66,11 @@ object Soulver {
         val sp = prefs.sp
         var data = sp.getString("rates", null)
         if (data == null || System.currentTimeMillis() - sp.getLong("ratesAt", 0) > 6 * 3_600_000L) {
-            withContext(Dispatchers.IO) { runCatching { fetchRates() } }.getOrNull()?.let {
+            withContext(Dispatchers.IO) { runCatching { withCachedCrypto(fetchRates(), data) } }.getOrNull()?.let {
                 data = it
-                sp.edit().putString("rates", it).putLong("ratesAt", System.currentTimeMillis()).apply()
+                // Without any crypto rate the set isn't marked fresh, so the next refresh retries CoinGecko.
+                val fresh = it.split(";").any { e -> e.substringBefore("=") in Crypto.values }
+                sp.edit().putString("rates", it).putLong("ratesAt", if (fresh) System.currentTimeMillis() else 0L).apply()
             }
         }
         data?.let { setRates(it) }
@@ -75,6 +80,13 @@ object Soulver {
         "bitcoin" to "BTC", "ethereum" to "ETH", "solana" to "SOL", "ripple" to "XRP", "dogecoin" to "DOGE",
         "cardano" to "ADA", "litecoin" to "LTC", "tether" to "USDT", "binancecoin" to "BNB", "polkadot" to "DOT",
     )
+
+    /** [rates] plus the crypto entries of [cached] it lacks, so a failed CoinGecko fetch keeps the last crypto rates. */
+    internal fun withCachedCrypto(rates: String, cached: String?): String {
+        val have = rates.split(";").map { it.substringBefore("=") }.toSet()
+        val carried = cached.orEmpty().split(";").filter { it.substringBefore("=").let { code -> code in Crypto.values && code !in have } }
+        return (listOf(rates) + carried).filter { it.isNotEmpty() }.joinToString(";")
+    }
 
     private fun get(url: String): String = (URL(url).openConnection() as HttpURLConnection).run {
         connectTimeout = 8000; readTimeout = 8000

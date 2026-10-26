@@ -23,6 +23,8 @@ private final class Rates: CurrencyRateProvider {
     func fetchRateInBackgroundFor(request: CurrencyRateRequest) async -> Decimal? { rateFor(request: request) }
 }
 nonisolated(unsafe) private let rates = Rates()
+/** Lowercased crypto names with no rate: the engine would convert them 1:1, so nativeEval answers nothing instead. */
+nonisolated(unsafe) private var unpriced: Set<String> = []
 // Custom unit names are case-sensitive, so lowercase symbols are listed too ("dot" is left out: it's a word).
 private let crypto: [String: [String]] = [
     "BTC": ["BTC", "btc", "bitcoin", "bitcoins", "Bitcoin"], "ETH": ["ETH", "eth", "ether", "ethereum", "Ethereum"],
@@ -36,8 +38,9 @@ private func rebuild() {
     c.unitSystem = unitSystem
     if !rates.perUSD.isEmpty { c.currencyRateProvider = rates }
     // The engine never asks the rate provider about crypto (it converts BTC 1:1), so crypto becomes custom units priced in USD.
+    unpriced = []
     for (code, names) in crypto {
-        guard let perUSD = rates.perUSD[code], perUSD != 0 else { continue }
+        guard let perUSD = rates.perUSD[code], perUSD != 0 else { unpriced.formUnion(names.map { $0.lowercased() }); continue }
         for name in names { c.customUnits.append(CustomUnit(name: name, definition: 1 / perUSD, equivalentUnit: .currencyUSD)) }
     }
     let calc = Calculator(customization: c)
@@ -108,6 +111,8 @@ public func nativeSetRates(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?,
 @_cdecl("Java_app_onlysearch_Soulver_nativeEval")
 public func nativeEval(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ expression: jstring?) -> jstring? {
     guard let calculator else { return nil }
-    let result = calculator.calculate(swiftString(env, expression))
+    let text = swiftString(env, expression)
+    if text.split(whereSeparator: { !$0.isLetter }).contains(where: { unpriced.contains($0.lowercased()) }) { return javaString(env, "") }
+    let result = calculator.calculate(text)
     return javaString(env, result.isEmptyResult || result.isFailedResult || result.isPendingResult ? "" : result.stringValue)
 }

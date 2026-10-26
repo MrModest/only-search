@@ -62,7 +62,6 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             Soulver.init(applicationContext)
             Soulver.setUnitSystem(prefs.unitSystem)
-            Soulver.refreshRates()
         }
         getSystemService(LauncherApps::class.java).registerCallback(packageCallback)
         // "query" extra opens search pre-filled; used by the CI screenshot step and handy for testing.
