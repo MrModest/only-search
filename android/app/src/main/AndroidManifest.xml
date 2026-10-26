@@ -31,6 +31,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:enableOnBackInvokedCallback="true"
             android:stateNotNeeded="true"
             android:clearTaskOnLaunch="true"
             android:resumeWhilePausing="true"

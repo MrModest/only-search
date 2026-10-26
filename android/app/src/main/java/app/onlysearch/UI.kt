@@ -73,6 +73,7 @@ import kotlin.math.roundToInt
 
 @Composable
 fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: Int, resumeTick: Int, initialQuery: String?, typed: Pair<Int, String>) {
+    BackHandler(true) {} // lowest priority: Back on home must not finish the launcher
     val scope = rememberCoroutineScope()
     val activity = LocalContext.current as Activity
     val screenPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
