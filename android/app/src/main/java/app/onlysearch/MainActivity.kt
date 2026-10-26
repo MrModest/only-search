@@ -53,10 +53,14 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this, "No room for this widget on the page", Toast.LENGTH_SHORT).show()
             }
         }
+        savedInstanceState?.let { st ->
+            widgets.pending = st.getInt("pendingWidget", -1)
+            st.getIntArray("widgetSpot")?.let { apps.widgetSpot = it[0] to Cell("", it[1], it[2], it[3], it[4]) }
+        }
         apps.pruneWidgets { widgets.manager.getAppWidgetInfo(it) != null }
         // Ids no page uses any more (a restore or Nova import replaced the layout) are released.
         val used = apps.pages.flatMap { p -> p.items.mapNotNull { it.widgetId } }.toSet()
-        widgets.host.appWidgetIds.filter { it !in used }.forEach(widgets::remove)
+        widgets.host.appWidgetIds.filter { it !in used && it != widgets.pending }.forEach(widgets::remove)
         bindNovaWidgets(this, apps, widgets)
         lifecycleScope.launch { apps.load() }
         lifecycleScope.launch {
@@ -96,6 +100,12 @@ class MainActivity : ComponentActivity() {
             typed.value = typed.value.first + 1 to String(Character.toChars(c)); return true
         }
         return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt("pendingWidget", widgets.pending)
+        apps.widgetSpot?.let { (p, c) -> outState.putIntArray("widgetSpot", intArrayOf(p, c.x, c.y, c.w, c.h)) }
     }
 
     override fun onDestroy() {

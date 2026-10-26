@@ -29,7 +29,8 @@ class Widgets(private val activity: Activity) {
     }
     val manager: AppWidgetManager = AppWidgetManager.getInstance(activity)
     var onBound: (Int) -> Unit = {}
-    private var pending = -1
+    /** The id waiting on its bind/configure result; kept across a recreate by MainActivity. */
+    var pending = -1
     /** Widgets waiting to be added one after another (a Nova import); each runs its setup just before it's added. */
     private val queue = ArrayDeque<Pair<AppWidgetProviderInfo, () -> Unit>>()
 

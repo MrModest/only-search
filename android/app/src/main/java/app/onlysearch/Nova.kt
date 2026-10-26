@@ -204,7 +204,6 @@ private fun readPrefsXml(file: File): Map<String, String> {
 /** Binds the widgets a Nova import queued, one after another (each may ask to allow binding or to configure). */
 internal fun bindNovaWidgets(context: Context, apps: Apps, widgets: Widgets) {
     val json = prefs.sp.getString("novaWidgets", null) ?: return
-    prefs.sp.edit { remove("novaWidgets") }
     val providers = AppWidgetManager.getInstance(context).installedProviders
     val arr = JSONArray(json)
     val queue = (0 until arr.length()).mapNotNull { i ->
@@ -213,7 +212,13 @@ internal fun bindNovaWidgets(context: Context, apps: Apps, widgets: Widgets) {
         val info = providers.firstOrNull { it.provider == cn && it.profile.hashCode() == o.getInt("profile") } ?: providers.firstOrNull { it.provider == cn }
             ?: return@mapNotNull null
         val page = o.getInt("page").coerceIn(apps.pages.indices)
-        info to { apps.widgetSpot = page to Cell("", o.getInt("x"), o.getInt("y"), o.getInt("w"), o.getInt("h")) }
+        info to {
+            // What's left is written back as each widget starts, so an import cut short by process death resumes.
+            val rest = JSONArray((i + 1 until arr.length()).map(arr::get))
+            prefs.sp.edit { if (rest.length() == 0) remove("novaWidgets") else putString("novaWidgets", rest.toString()) }
+            apps.widgetSpot = page to Cell("", o.getInt("x"), o.getInt("y"), o.getInt("w"), o.getInt("h"))
+        }
     }
+    if (queue.isEmpty()) prefs.sp.edit { remove("novaWidgets") }
     widgets.addAll(queue)
 }
