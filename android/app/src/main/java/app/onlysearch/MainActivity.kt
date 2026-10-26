@@ -31,12 +31,12 @@ class MainActivity : ComponentActivity() {
     private val typed = androidx.compose.runtime.mutableStateOf(0 to "")
 
     private val packageCallback = object : LauncherApps.Callback() {
-        private fun reload() { lifecycleScope.launch { apps.load() } }
-        override fun onPackageRemoved(packageName: String, user: UserHandle) = reload()
-        override fun onPackageAdded(packageName: String, user: UserHandle) = reload()
-        override fun onPackageChanged(packageName: String, user: UserHandle) = reload()
-        override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = reload()
-        override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = reload()
+        private fun reload(vararg pkgs: String) { lifecycleScope.launch { apps.load(pkgs.toSet()) } }
+        override fun onPackageRemoved(packageName: String, user: UserHandle) = reload(packageName)
+        override fun onPackageAdded(packageName: String, user: UserHandle) = reload(packageName)
+        override fun onPackageChanged(packageName: String, user: UserHandle) = reload(packageName)
+        override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = reload(*packageNames)
+        override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = reload(*packageNames)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

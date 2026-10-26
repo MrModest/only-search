@@ -114,8 +114,12 @@ class Apps(private val context: Context) {
 
     fun byKey(key: String) = all.firstOrNull { it.key == key }
 
-    suspend fun load() {
-        val (apps, newIcons) = withContext(Dispatchers.Default) {
+    private class Loaded(val apps: List<Pair<App, android.content.pm.LauncherActivityInfo>>, val icons: Map<String, ImageBitmap>, val mono: Map<String, ImageBitmap>, val packedKeys: Set<String>)
+
+    /** [changed]: packages whose icons must be rendered again (updated, replaced). */
+    suspend fun load(changed: Set<String> = emptySet()) {
+        if (changed.isNotEmpty()) listOf(icons, monoIcons, packed).forEach { m -> m.keys.removeAll { it.substringBefore('/') in changed } }
+        val r = withContext(Dispatchers.Default) {
             val users = context.getSystemService(UserManager::class.java).userProfiles
             val apps = users.flatMap { user ->
                 launcher.getActivityList(null, user).map { App(it.label.toString(), it.componentName, user) to it }
@@ -128,11 +132,19 @@ class Apps(private val context: Context) {
             val fromPack = fresh.mapNotNull { (app, info) ->
                 runCatching { pack?.icon(app.component, size) ?: pack?.fallback(info.getIcon(0), size) }.getOrNull()?.let { app.key to it }
             }.toMap()
-            apps to (fresh.associate { (app, info) -> app.key to (fromPack[app.key] ?: squareIcon(info.getIcon(0), size)) } to
-                fresh.mapNotNull { (app, info) -> monoIcon(info.getIcon(0), size)?.let { app.key to it } }.toMap()) to fromPack.keys
-        }.let { (a, packedKeys) -> a.also { packedKeys.forEach { packed[it] = true } } }
-        icons.putAll(newIcons.first)
-        monoIcons.putAll(newIcons.second)
+            Loaded(
+                apps,
+                fresh.associate { (app, info) -> app.key to (fromPack[app.key] ?: squareIcon(info.getIcon(0), size)) },
+                fresh.mapNotNull { (app, info) -> monoIcon(info.getIcon(0), size)?.let { app.key to it } }.toMap(),
+                fromPack.keys,
+            )
+        }
+        val apps = r.apps
+        r.packedKeys.forEach { packed[it] = true }
+        icons.putAll(r.icons)
+        monoIcons.putAll(r.mono)
+        val live = apps.map { it.first.key }.toSet()
+        listOf(icons, monoIcons, packed).forEach { m -> m.keys.retainAll(live) }
         sp.all.forEach { (k, v) -> if (k.startsWith("count:") && v is Int) counts[k.removePrefix("count:")] = v }
         all.clear(); all.addAll(apps.map { it.first })
         if (dock.isEmpty() && pages.all { it.items.isEmpty() } && !sp.getBoolean("seeded", false)) seedDefaults()
