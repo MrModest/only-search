@@ -79,6 +79,8 @@ class Prefs(context: Context) {
     var mic by P("set.mic", true)
 
     // Look & feel
+    /** "system", "light" or "dark". */
+    var theme by P("set.theme", "system")
     var accent by P("set.accent", "sky")
     /** [accent] as a colour, parsed once per change. */
     val accentColor by derivedStateOf {

@@ -1,6 +1,7 @@
 package app.onlysearch
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.content.pm.LauncherApps
 import android.os.Bundle
 import android.os.SystemClock
@@ -14,6 +15,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.lifecycleScope
@@ -41,9 +43,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Light status/nav icons always: every screen is dark, whatever the system theme.
+        // Light status/nav icons over the wallpaper; Launcher darkens them over light theme sheets.
         enableEdgeToEdge(SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT))
         prefs = Prefs(this)
+        systemDark = isNight(resources.configuration)
         apps = Apps(this)
         widgets = Widgets(this)
         widgets.onBound = { id ->
@@ -71,7 +74,7 @@ class MainActivity : ComponentActivity() {
         // "query" extra opens search pre-filled; used by the CI screenshot step and handy for testing.
         val query = intent.getStringExtra("query")
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            MaterialTheme(colorScheme = if (isLight) lightColorScheme() else darkColorScheme()) {
                 Launcher(apps, widgets, home.value, stopTick.intValue, resumeTick.intValue, query, typed.value)
             }
         }
@@ -85,6 +88,13 @@ class MainActivity : ComponentActivity() {
         val inFront = hasWindowFocus() && intent.flags and Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT == 0 && SystemClock.uptimeMillis() - startedAt > 500
         if (intent.hasCategory(Intent.CATEGORY_HOME)) home.value = home.value.first + 1 to inFront
     }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        systemDark = isNight(newConfig)
+    }
+
+    private fun isNight(c: Configuration) = (c.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
     override fun onStart() { super.onStart(); startedAt = SystemClock.uptimeMillis(); widgets.host.startListening() }
     override fun onStop() { super.onStop(); runCatching { widgets.host.stopListening() }; stopTick.intValue++ }

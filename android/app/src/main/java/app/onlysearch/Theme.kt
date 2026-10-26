@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -27,30 +28,53 @@ import androidx.compose.ui.unit.sp
 
 // Mock-up 2026-10-24 (docs/Mock-up 2026-10-24.html): soft dark tiles and cards, sky-blue accent, Sans + JetBrains Mono.
 // Motion follows Nova Launcher: finger-tracked drawer, icon zoom launches, press scale, popup shortcuts.
-// Sheet, Scrim and the accent colours follow Settings › Look & feel; reading them in composition keeps the UI in sync.
-internal val Sheet get() = if (prefs.black) Color.Black else Color(0xFF0E0F12)
-internal val Tile = Color(0xFF1E2025)
-internal val TileLine = Color(0xFF30333A)
-internal val FieldBg = Color(0xFF1A1C21)
-internal val Card = Color(0xFF16181C)
+// The theme setting, Sheet, Scrim and the accent colours follow Settings › Look & feel; reading them in composition keeps the UI in sync.
+/** The system's dark mode, kept up to date by MainActivity; the "system" theme follows it. */
+internal var systemDark by mutableStateOf(true)
+internal val isLight get() = when (prefs.theme) { "light" -> true; "dark" -> false; else -> !systemDark }
+/** A colour with its dark and light theme values. */
+internal fun pick(dark: Long, light: Long) = Color(if (isLight) light else dark)
+internal val Sheet get() = if (isLight) Color(0xFFF6F5F2) else if (prefs.black) Color.Black else Color(0xFF0E0F12)
+internal val Tile get() = pick(0xFF1E2025, 0xFFFFFFFF)
+internal val TileLine get() = pick(0xFF30333A, 0xFFDAD8D3)
+internal val FieldBg get() = pick(0xFF1A1C21, 0xFFECEBE7)
+internal val FieldLine get() = pick(0xFF2A2D33, 0xFFD9D7D2)
+internal val Card get() = pick(0xFF16181C, 0xFFFFFFFF)
 /** Widgets are near-square; only the search bar is round. */
 internal val WidgetCorner = 6.dp
-internal val CardLine = Color(0xFF26292F)
-internal val Divider = Color(0xFF23262C)
-internal val PillLine = Color(0xFF34373E)
-internal val ChipLine = Color(0xFF2E3138)
-internal val Accents = listOf("sky" to Color(0xFF7CC4FA), "amber" to Color(0xFFF5B04A), "mint" to Color(0xFF7FD8B0), "rose" to Color(0xFFF59AB0), "violet" to Color(0xFFB9A2F8), "white" to Color(0xFFF2F2F2))
+internal val CardLine get() = pick(0xFF26292F, 0xFFE2E0DB)
+internal val Divider get() = pick(0xFF23262C, 0xFFE6E4DF)
+internal val PillLine get() = pick(0xFF34373E, 0xFFD6D4CF)
+internal val ChipLine get() = pick(0xFF2E3138, 0xFFDCDAD5)
+/** Switch tracks, drag handles, inactive buttons. */
+internal val Knob get() = pick(0xFF3A3D45, 0xFFC9C7C2)
+/** Name, dark theme colour, light theme colour: darker shades that read on light sheets ("white" turns near-black). */
+internal val Accents = listOf(
+    Triple("sky", Color(0xFF7CC4FA), Color(0xFF1C6FB0)), Triple("amber", Color(0xFFF5B04A), Color(0xFFA15C00)),
+    Triple("mint", Color(0xFF7FD8B0), Color(0xFF17785A)), Triple("rose", Color(0xFFF59AB0), Color(0xFFB83A62)),
+    Triple("violet", Color(0xFFB9A2F8), Color(0xFF6A4FC8)), Triple("white", Color(0xFFF2F2F2), Color(0xFF222222)),
+)
+/** A custom accent in light theme, darkened until it has about 4.5:1 contrast on the light sheets. */
+private val lightAccent by derivedStateOf {
+    Accents.firstOrNull { it.first == prefs.accent }?.third
+        ?: generateSequence(prefs.accentColor) { lerp(it, Color.Black, 0.1f) }.first { it.luminance() <= 0.15f }
+}
 /** A named accent, or a custom one stored as "#RRGGBB". */
-internal val Accent get() = prefs.accentColor
-internal val OnAccent get() = lerp(Color(0xFF06121C), Accent, 0.05f)
-internal val AccentCard get() = lerp(Color(0xFF0E0F12), Accent, 0.07f)
-internal val AccentLine get() = lerp(Color(0xFF0E0F12), Accent, 0.28f)
-internal val Fg = Color(0xFFEDEAE4)
-internal val Muted = Color(0xFFA6A29A)
-internal val Dim = Color(0xFF8C887F)
-internal val Danger = Color(0xFFFF8A7A)
-internal val Scrim get() = if (prefs.black) Color(0xF5000000) else Color(0xF2111216)
-internal val PopupBg = Color(0xFF1C1E23)
+internal val Accent get() = if (isLight) lightAccent else prefs.accentColor
+internal val OnAccent get() = if (isLight) lerp(Color.White, Accent, 0.05f) else lerp(Color(0xFF06121C), Accent, 0.05f)
+internal val AccentCard get() = if (isLight) lerp(Sheet, Accent, 0.1f) else lerp(Color(0xFF0E0F12), Accent, 0.07f)
+internal val AccentLine get() = if (isLight) lerp(Sheet, Accent, 0.35f) else lerp(Color(0xFF0E0F12), Accent, 0.28f)
+/** Calculator expressions. */
+internal val Expr get() = pick(0xFFD6DEE6, 0xFF2B3138)
+internal val Fg get() = pick(0xFFEDEAE4, 0xFF1C1B19)
+internal val Muted get() = pick(0xFFA6A29A, 0xFF5F5C56)
+internal val Dim get() = pick(0xFF8C887F, 0xFF726E67)
+internal val Danger get() = pick(0xFFFF8A7A, 0xFFC0392B)
+internal val Scrim get() = if (isLight) Color(0xF2F6F5F2) else if (prefs.black) Color(0xF5000000) else Color(0xF2111216)
+internal val PopupBg get() = pick(0xFF1C1E23, 0xFFFFFFFF)
+/** Text straight on the wallpaper (home labels, clock) stays light with a shadow in both themes. */
+internal val WallFg = Color(0xFFEDEAE4)
+internal val WallMuted = Color(0xFFA6A29A)
 internal val TextShadow = Shadow(Color(0x66000000), Offset(0f, 1f), 3f)
 internal val Settle = spring<Float>(dampingRatio = 0.9f, stiffness = 420f)
 

@@ -39,7 +39,7 @@ fun GroupEditor(apps: Apps, index: Int, onClose: () -> Unit) {
                     if (old != null) Text("Delete", color = Danger, fontSize = 14.sp,
                         modifier = Modifier.clip(CircleShape).clickable { apps.deleteGroup(index); onClose() }.padding(horizontal = 12.dp, vertical = 8.dp))
                     val ok = name.isNotBlank()
-                    Box(Modifier.padding(start = 4.dp).height(38.dp).clip(CircleShape).background(if (ok) Accent else Color(0xFF3A3D45))
+                    Box(Modifier.padding(start = 4.dp).height(38.dp).clip(CircleShape).background(if (ok) Accent else Knob)
                         .clickable(enabled = ok) { apps.saveGroup(index, AppGroup(name.trim(), chosen.toList())); onClose() }.padding(horizontal = 18.dp),
                         contentAlignment = Alignment.Center) { Text("Save", color = if (ok) OnAccent else Muted, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
                 }
@@ -49,7 +49,7 @@ fun GroupEditor(apps: Apps, index: Int, onClose: () -> Unit) {
                     Field(name, { name = it }, "Group name, e.g. Work", Modifier.weight(1f), autoFocus = old == null) {}
                 }
                 Spacer(Modifier.height(10.dp))
-                Row(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(14.dp)).background(FieldBg).border(1.dp, Color(0xFF2A2D33), RoundedCornerShape(14.dp))
+                Row(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(14.dp)).background(FieldBg).border(1.dp, FieldLine, RoundedCornerShape(14.dp))
                     .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Icon(Ic.search, null, tint = Muted, modifier = Modifier.size(18.dp))
                     Field(filter, { filter = it }, "Find apps", Modifier.weight(1f), autoFocus = false, fontSize = 15) {}

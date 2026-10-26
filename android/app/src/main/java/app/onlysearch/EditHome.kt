@@ -153,7 +153,7 @@ private fun RowScope.EditButton(icon: ImageVector, label: String, onClick: () ->
 
 @Composable
 private fun AddPageCard(onClick: () -> Unit) {
-    val line = Color(0xFF3A3D45)
+    val line = Knob
     Box(
         Modifier.fillMaxSize().clip(RoundedCornerShape(30.dp)).drawBehind {
             drawRoundRect(line, cornerRadius = CornerRadius(30.dp.toPx()),
@@ -168,7 +168,7 @@ private fun AddPageCard(onClick: () -> Unit) {
 private fun PagePreview(apps: Apps, page: HomePage, current: Boolean, modifier: Modifier) {
     val shape = RoundedCornerShape(30.dp)
     Column(
-        modifier.fillMaxSize().clip(shape).background(Sheet).border(if (current) 2.dp else 1.dp, if (current) Accent else Color(0xFF2A2D33), shape)
+        modifier.fillMaxSize().clip(shape).background(Sheet).border(if (current) 2.dp else 1.dp, if (current) Accent else FieldLine, shape)
             .padding(start = 14.dp, end = 14.dp, top = 22.dp, bottom = 14.dp)
     ) {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
@@ -184,8 +184,8 @@ private fun PagePreview(apps: Apps, page: HomePage, current: Boolean, modifier: 
                         verticalArrangement = Arrangement.spacedBy(7.dp),
                     ) {
                         Box(Modifier.fillMaxWidth(0.35f).height(4.dp).clip(CircleShape).background(Accent))
-                        Box(Modifier.fillMaxWidth(0.9f).height(3.dp).clip(CircleShape).background(Color(0xFF3A3D45)))
-                        Box(Modifier.fillMaxWidth(0.7f).height(3.dp).clip(CircleShape).background(Color(0xFF3A3D45)))
+                        Box(Modifier.fillMaxWidth(0.9f).height(3.dp).clip(CircleShape).background(Knob))
+                        Box(Modifier.fillMaxWidth(0.7f).height(3.dp).clip(CircleShape).background(Knob))
                     } else {
                         val bmp = apps.byKey(apps.folders[c.key]?.apps?.firstOrNull() ?: c.key)?.let { apps.icons[it.key] }
                         val s = iconShape(prefs.iconShape, icon)

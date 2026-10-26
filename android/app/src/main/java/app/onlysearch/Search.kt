@@ -230,7 +230,7 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
             total > 0 -> "" to counted
             else -> "no matches" to ""
         }
-        Row(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF22252A))) {}
+        Row(Modifier.fillMaxWidth().height(1.dp).background(Divider)) {}
         Row(Modifier.fillMaxWidth().height(34.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(left, color = Dim, fontSize = 11.sp, fontFamily = Mono, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Text(right, color = Dim, fontSize = 11.sp, fontFamily = Mono, maxLines = 1)
@@ -287,10 +287,10 @@ internal fun TopHit(apps: Apps, app: App, range: IntRange?, shortcuts: List<Shor
                     Text(if (last > 0) "Top hit · opened ${ago(last)}" else "Top hit", color = Muted, fontSize = 12.sp)
                 }
                 Text("↵", color = Accent, fontSize = 11.sp, fontFamily = Mono, modifier = Modifier
-                    .border(1.dp, Color(0xFF2C4E6C), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp))
+                    .border(1.dp, AccentLine, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp))
             }
             if (shortcuts.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                shortcuts.forEach { s -> Chip(s.label, Color(0xFF16232F), AccentLine, Sans, 13) { apps.launch(s, source()) } }
+                shortcuts.forEach { s -> Chip(s.label, AccentCard, AccentLine, Sans, 13) { apps.launch(s, source()) } }
             }
         }
         if (menu) AppPopup(apps, app, anchor(), hint = false) { menu = false }
@@ -312,7 +312,7 @@ private fun PersonRow(p: Person, query: String) {
     fun go(i: Intent) = runCatching { context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     Row(Modifier.fillMaxWidth().height(58.dp).clickable { openContact(context, p) }.padding(start = 12.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        val (bg, fg) = Avatars[(p.id % Avatars.size).toInt()]
+        val (bg, fg) = Avatars[(p.id % Avatars.size).toInt()].let { if (isLight) it.second to it.first else it }
         Box(Modifier.size(36.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
             if (p.photo != null) Image(p.photo, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             else Text(p.name.split(' ').filter { it.isNotEmpty() }.take(2).joinToString("") { it.take(1) }.uppercase(), color = fg, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -334,7 +334,7 @@ private fun ContactsPrompt(onAllow: () -> Unit, onOff: () -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(start = 14.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Find people in your contacts", fontSize = 14.sp, color = Muted, modifier = Modifier.weight(1f))
-        Chip("Allow", Color(0xFF16232F), AccentLine, Sans, 13, onAllow)
+        Chip("Allow", AccentCard, AccentLine, Sans, 13, onAllow)
         Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onOff).semantics { contentDescription = "Turn off people results" },
             contentAlignment = Alignment.Center) { Icon(Ic.close, null, tint = Dim, modifier = Modifier.size(16.dp)) }
     }
@@ -356,7 +356,7 @@ internal fun CalcCard(c: Calc, onCopy: () -> Unit) {
             .clickable(onClick = onCopy).padding(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(c.expression, color = Color(0xFFD6DEE6), fontSize = 15.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        Text(c.expression, color = Expr, fontSize = 15.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
         // Long answers (dates, multi-unit results) step down so they stay on one or two lines.
         val big = c.result.length <= 13
         Text(c.result, color = Accent, fontSize = if (big) 40.sp else 26.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.03).em,

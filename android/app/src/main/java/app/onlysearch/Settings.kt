@@ -44,7 +44,6 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -54,8 +53,8 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 
-internal val SettingsBg get() = if (prefs.black) Color.Black else Color(0xFF111216)
-internal val GroupLine = Color(0xFF24272D)
+internal val SettingsBg get() = if (isLight) Color(0xFFF2F1EE) else if (prefs.black) Color.Black else Color(0xFF111216)
+internal val GroupLine get() = pick(0xFF24272D, 0xFFE3E1DC)
 
 internal object SIc {
     val back = line("M15 5l-7 7 7 7", 2f)
@@ -106,8 +105,8 @@ private fun settingsPages(apps: Apps): List<Page> = listOf(
         { "Swipe down: ${actionLabel(apps, gesture("gDown")).lowercase()} · double tap: ${actionLabel(apps, gesture("gDoubleTap")).lowercase().removeSuffix(" screen")}" },
         "gestures swipe double tap pinch home button dock lock notifications type anywhere keyboard reset query") { GestureSettings(apps) },
     Page("look", "Behaviour", SIc.look, false, "Look & feel",
-        { listOfNotNull(if (prefs.black) "Black" else "Dark", "${prefs.accent} accent", "themed icons".takeIf { prefs.themedIcons }).joinToString(" · ") },
-        "theme accent colour color dark black themed icons monochrome wallpaper dim icon pack") { LookSettings(apps) },
+        { listOfNotNull(Themes.first { it.first == prefs.theme }.second + " theme", "pure black".takeIf { prefs.black && !isLight }, "${prefs.accent} accent", "themed icons".takeIf { prefs.themedIcons }).joinToString(" · ") },
+        "theme light dark system accent colour color black themed icons monochrome wallpaper dim icon pack") { LookSettings(apps) },
     Page("backup", "System", SIc.backup, false, "Backup & restore",
         { "Last backup: " + prefs.sp.getLong("lastBackup", 0L).let { if (it == 0L) "never" else ago(it) } },
         "backup restore export import json file nova launcher") { BackupSettings(apps) },
@@ -137,7 +136,7 @@ private fun Hub(apps: Apps, pages: List<Page>, onClose: () -> Unit, onOpen: (Str
         )
         Row(
             Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp)).background(FieldBg)
-                .border(1.dp, Color(0xFF2A2D33), RoundedCornerShape(14.dp)).padding(horizontal = 14.dp),
+                .border(1.dp, FieldLine, RoundedCornerShape(14.dp)).padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Icon(Ic.search, null, tint = Muted, modifier = Modifier.size(18.dp))
@@ -162,7 +161,7 @@ private fun NavRow(p: Page, onClick: () -> Unit) {
         Modifier.fillMaxWidth().heightIn(min = 58.dp).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(if (p.accent) Color(0xFF16232F) else GroupLine), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(if (p.accent) AccentCard else GroupLine), contentAlignment = Alignment.Center) {
             Icon(p.icon, null, tint = if (p.accent) Accent else Fg, modifier = Modifier.size(18.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -211,7 +210,7 @@ internal fun Group(title: String?, rows: List<@Composable () -> Unit>, modifier:
 @Composable
 internal fun Switch(checked: Boolean, label: String, onChange: ((Boolean) -> Unit)?) {
     Box(
-        Modifier.size(48.dp, 28.dp).clip(CircleShape).background(if (checked) Accent else Color(0xFF3A3D45))
+        Modifier.size(48.dp, 28.dp).clip(CircleShape).background(if (checked) Accent else Knob)
             .then(if (onChange == null) Modifier else Modifier.toggleable(checked, role = Role.Switch, onValueChange = onChange).semantics { contentDescription = label })
             .padding(3.dp),
         contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
@@ -291,7 +290,7 @@ private fun HomeSettings() {
                                 .border(if (on) 1.5.dp else 1.dp, if (on) Accent else ChipLine, RoundedCornerShape(14.dp))
                                 .clickable { prefs.iconShape = name }.semantics { contentDescription = name },
                             contentAlignment = Alignment.Center,
-                        ) { Box(Modifier.size(28.dp).clip(iconShape(name, 28.dp)).background(if (on) Accent else Color(0xFF6B6E76))) }
+                        ) { Box(Modifier.size(28.dp).clip(iconShape(name, 28.dp)).background(if (on) Accent else pick(0xFF6B6E76, 0xFFB5B2AC))) }
                     }
                 }
             }
@@ -304,7 +303,7 @@ private fun HomeSettings() {
 /** Small live model of the home screen: clock, the icon grid at the chosen size and shape, search bar. */
 @Composable
 private fun HomePreview() {
-    val dot = Color(0xFF24262C)
+    val dot = pick(0xFF24262C, 0xFFE3E1DC)
     Column(
         Modifier.fillMaxWidth().wrapContentWidth().padding(top = 0.dp, bottom = 18.dp).size(170.dp, 250.dp)
             .clip(RoundedCornerShape(22.dp)).background(Sheet).border(1.dp, PillLine, RoundedCornerShape(22.dp))
@@ -322,13 +321,13 @@ private fun HomePreview() {
             repeat(minOf(prefs.rows, 3)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     repeat(prefs.columns) {
-                        Box(Modifier.size(cell).clip(iconShape(prefs.iconShape, cell)).background(Color(0xFF23262C))
+                        Box(Modifier.size(cell).clip(iconShape(prefs.iconShape, cell)).background(Divider)
                             .border(1.dp, PillLine, iconShape(prefs.iconShape, cell)))
                     }
                 }
             }
         }
-        Box(Modifier.padding(top = 12.dp).fillMaxWidth().height(20.dp).clip(CircleShape).background(Color(0xFF23262C)))
+        Box(Modifier.padding(top = 12.dp).fillMaxWidth().height(20.dp).clip(CircleShape).background(Divider))
     }
 }
 
@@ -345,7 +344,7 @@ internal fun Stepper(title: String, value: Int, range: IntRange, onChange: (Int)
 @Composable
 private fun StepButton(text: String, label: String, enabled: Boolean, onClick: () -> Unit) {
     Box(
-        Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF23262C)).border(1.dp, PillLine, RoundedCornerShape(12.dp))
+        Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Divider).border(1.dp, PillLine, RoundedCornerShape(12.dp))
             .clickable(enabled = enabled, onClick = onClick).semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) { Text(text, fontSize = 18.sp, color = if (enabled) Fg else Dim) }
@@ -372,7 +371,7 @@ private fun ThinSlider(label: String, value: Int, range: IntRange, step: Int, on
             .pointerInput(range) { detectHorizontalDragGestures { c, _ -> pick(c.position.x, size.width) } },
         contentAlignment = Alignment.CenterStart,
     ) {
-        Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(Color(0xFF3A3D45)))
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(Knob))
         Box(Modifier.fillMaxWidth(frac).height(4.dp).clip(CircleShape).background(Accent))
         Box(Modifier.offset(x = (maxWidth - 20.dp) * frac).size(20.dp).clip(CircleShape).background(Accent).border(3.dp, SettingsBg, CircleShape))
     }
@@ -427,6 +426,7 @@ private fun SourcesSettings() {
     }
 }
 
+internal val Themes = listOf("system" to "System", "light" to "Light", "dark" to "Dark")
 internal val UnitSystems = listOf("metric" to "Metric", "imperial" to "Imperial (UK)", "customaryUS" to "US customary")
 internal val Currencies = listOf("USD" to "$", "EUR" to "€", "GBP" to "£", "JPY" to "¥", "CHF" to "CHF", "CAD" to "$", "AUD" to "$", "CNY" to "¥",
     "INR" to "₹", "RUB" to "₽", "SEK" to "kr", "NOK" to "kr", "DKK" to "kr", "PLN" to "zł", "CZK" to "Kč", "TRY" to "₺", "BRL" to "R$", "MXN" to "$",
@@ -443,7 +443,7 @@ private fun CalcSettings() {
             .border(1.dp, AccentLine, RoundedCornerShape(16.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("\$48 + 15% tip", color = Color(0xFFD6DEE6), fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.weight(1f))
+        Text("\$48 + 15% tip", color = Expr, fontSize = 13.sp, fontFamily = Mono, modifier = Modifier.weight(1f))
         Text(preview, color = Accent, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         Text("preview", color = Muted, fontSize = 10.sp, fontFamily = Mono)
     }
@@ -535,18 +535,20 @@ private fun LookSettings(apps: Apps) {
                         .border(if (custom) 3.dp else 0.dp, if (custom) Fg else Color.Transparent, CircleShape))
                     Text("Custom", color = if (custom) Fg else Muted, fontSize = 12.sp)
                 }
-                Accents.forEach { (name, color) ->
+                Accents.forEach { (name, dark, light) ->
+                    val color = if (isLight) light else dark
                     val on = prefs.accent == name
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { prefs.accent = name }.padding(4.dp).semantics { contentDescription = name }) {
-                        Box(Modifier.size(40.dp).clip(CircleShape).background(color).border(if (on) 3.dp else 0.dp, if (!on) Color.Transparent else if (name == "white") Accent.copy(alpha = 0.5f).compositeOver(Color.Black) else Fg, CircleShape))
+                        Box(Modifier.size(40.dp).clip(CircleShape).background(color).border(if (on) 3.dp else 0.dp, if (!on) Color.Transparent else if (name == "white") Dim else Fg, CircleShape))
                         Text(name.replaceFirstChar { it.uppercase() }, color = if (on) Fg else Muted, fontSize = 12.sp)
                     }
                 }
             }
         })
         Group("Theme", listOf(
-            { SwitchRow("Pure black", "Black sheets for OLED screens", prefs.black) { prefs.black = it } },
+            { ValueMenu("Theme", Themes.first { it.first == prefs.theme }.second, Themes, prefs.theme) { prefs.theme = it } },
+            { SwitchRow("Pure black", "Black sheets for OLED screens in the dark theme", prefs.black) { prefs.black = it } },
             {
                 SwitchRow("Themed icons", if (android.os.Build.VERSION.SDK_INT >= 33) "Monochrome icons in the accent colour, where apps provide one" else "Needs Android 13",
                     prefs.themedIcons) { prefs.themedIcons = it && android.os.Build.VERSION.SDK_INT >= 33 }
@@ -570,7 +572,7 @@ private fun LookSettings(apps: Apps) {
 /** Hue, saturation and brightness sliders for a custom accent; it applies as you drag. */
 @Composable
 private fun AccentPicker(onClose: () -> Unit) {
-    val start = remember { FloatArray(3).also { android.graphics.Color.colorToHSV(Accent.toArgb(), it) } }
+    val start = remember { FloatArray(3).also { android.graphics.Color.colorToHSV(prefs.accentColor.toArgb(), it) } }
     var hue by remember { mutableStateOf(start[0].roundToInt()) }
     var sat by remember { mutableStateOf((start[1] * 100).roundToInt()) }
     var bri by remember { mutableStateOf((start[2] * 100).roundToInt()) }
@@ -586,7 +588,7 @@ private fun AccentPicker(onClose: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.size(36.dp).clip(CircleShape).background(Accent))
                 Text("Custom accent", color = Fg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text(String.format("#%06X", Accent.toArgb() and 0xFFFFFF), color = Muted, fontSize = 13.sp, fontFamily = Mono)
+                Text(String.format("#%06X", prefs.accentColor.toArgb() and 0xFFFFFF), color = Muted, fontSize = 13.sp, fontFamily = Mono)
             }
             listOf(Triple("Hue", hue, 0..360), Triple("Saturation", sat, 0..100), Triple("Brightness", bri, 0..100)).forEach { (label, v, range) ->
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

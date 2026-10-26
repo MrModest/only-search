@@ -56,6 +56,8 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -141,6 +143,14 @@ fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: I
     }
     BackHandler(searching || picking || editing || drawerOpening) {
         when { picking -> picking = false; searching -> closeSearch(); editing -> editing = false; else -> settleDrawer(false) }
+    }
+
+    // Light theme sheets get dark status and nav icons; over the wallpaper (and the picker's dark scrim) they stay light.
+    val view = LocalView.current
+    val darkStatus by remember { derivedStateOf { isLight && (searching || settings != null || editing || drawer.value > 0.5f) } }
+    val darkNav by remember { derivedStateOf { darkStatus || isLight && picking } }
+    LaunchedEffect(darkStatus, darkNav) {
+        WindowCompat.getInsetsController(activity.window, view).run { isAppearanceLightStatusBars = darkStatus; isAppearanceLightNavigationBars = darkNav }
     }
 
     // Wallpaper blurs behind the open drawer / search (Android 12+, needs cross-window blur enabled).
@@ -265,7 +275,7 @@ fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: I
                 if (prefs.dim > 0) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = prefs.dim / 100f)))
                 HomeScreen(apps, widgets, pager, homeActions)
             }
-            // Status icons are always light (MainActivity); this shade keeps them readable on a light wallpaper.
+            // Status icons are light over the wallpaper; this shade keeps them readable on a light wallpaper.
             Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0x73000000), Color.Transparent)))
                 .windowInsetsPadding(WindowInsets.statusBars).height(16.dp))
             // Always composed and parked below the screen: adding it under the finger mid-swipe cancels the drag.

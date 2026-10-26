@@ -156,7 +156,7 @@ private fun ActionPicker(apps: Apps, title: String, current: String, onPick: (St
                     item {
                         Label("Apps and shortcuts", Modifier.padding(start = 4.dp, top = 18.dp, bottom = 8.dp))
                         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp).height(44.dp).clip(RoundedCornerShape(14.dp)).background(FieldBg)
-                            .border(1.dp, Color(0xFF2A2D33), RoundedCornerShape(14.dp)).padding(horizontal = 14.dp),
+                            .border(1.dp, FieldLine, RoundedCornerShape(14.dp)).padding(horizontal = 14.dp),
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Icon(Ic.search, null, tint = Muted, modifier = Modifier.size(18.dp))
                             Field(filter, { filter = it }, "Find an app", Modifier.weight(1f), autoFocus = false, fontSize = 15) {}

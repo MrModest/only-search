@@ -149,7 +149,7 @@ private fun hm(context: Context, t: Long) = DateFormat.format(if (DateFormat.is2
 fun NextEventLine(events: List<Event>) {
     val context = LocalContext.current
     val now = System.currentTimeMillis()
-    val next = events.firstOrNull { !it.allDay } ?: return Text("No more events today", color = Muted, fontSize = 15.sp, style = shadowed(),
+    val next = events.firstOrNull { !it.allDay } ?: return Text("No more events today", color = WallMuted, fontSize = 15.sp, style = shadowed(),
         modifier = Modifier.padding(start = 8.dp, top = 8.dp))
     Row(Modifier.padding(start = 8.dp, top = 4.dp).clip(RoundedCornerShape(10.dp)).clickable { openCalendar(context, next.begin) }.padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

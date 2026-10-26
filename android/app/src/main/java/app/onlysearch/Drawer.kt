@@ -49,7 +49,7 @@ import kotlin.math.roundToInt
 
 @Composable
 internal fun Handle(modifier: Modifier = Modifier) = Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-    Box(Modifier.size(36.dp, 4.dp).clip(CircleShape).background(Color(0xFF3A3D45)))
+    Box(Modifier.size(36.dp, 4.dp).clip(CircleShape).background(Knob))
 }
 
 @Composable
@@ -83,7 +83,7 @@ internal fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: 
                 verticalAlignment = Alignment.CenterVertically) {
                 GroupTab("All", tab == -1) { tab = -1; scope.launch { grid.scrollToItem(0) } }
                 apps.groups.forEachIndexed { i, g -> GroupTab(g.name, tab == i, onLongClick = { editGroup = i }) { tab = i; scope.launch { grid.scrollToItem(0) } } }
-                Box(Modifier.size(36.dp).clip(CircleShape).border(1.dp, Color(0xFF3A3D45), CircleShape).clickable { editGroup = -1 }
+                Box(Modifier.size(36.dp).clip(CircleShape).border(1.dp, Knob, CircleShape).clickable { editGroup = -1 }
                     .semantics { contentDescription = "New group" }, contentAlignment = Alignment.Center) {
                     Icon(GIc.plus, null, tint = Muted, modifier = Modifier.size(18.dp))
                 }
@@ -105,7 +105,7 @@ internal fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: 
                 if (frequent.isNotEmpty()) {
                     item(span = { GridItemSpan(cols) }, contentType = "label") { Label("Suggested", Modifier.padding(start = 6.dp, top = 6.dp)) }
                     items(frequent, key = { "f" + it.key }, contentType = { "app" }) { AppTile(apps, it, Fg, 54.dp, drag = "drawer") }
-                    item(span = { GridItemSpan(cols) }, contentType = "divider") { Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF22252A))) }
+                    item(span = { GridItemSpan(cols) }, contentType = "divider") { Box(Modifier.fillMaxWidth().height(1.dp).background(Divider)) }
                 }
                 sections.forEach { (letter, group) ->
                     item(span = { GridItemSpan(cols) }, key = "h$letter", contentType = "header") {
@@ -153,7 +153,7 @@ internal fun DrawerScreen(apps: Apps, scroll: NestedScrollConnection, onSearch: 
                 }
             }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF22252A)))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Divider))
         Pill("Search ${visible.size} apps or calculate", Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
             height = 52.dp, onClick = onSearch)
     }

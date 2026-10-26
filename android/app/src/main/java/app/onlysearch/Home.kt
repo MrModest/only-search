@@ -227,9 +227,9 @@ internal fun HomeGrid(apps: Apps, widgets: Widgets, index: Int, page: HomePage, 
         page.items.forEach { c ->
             key(c.key) {
                 if (!c.isWidget) Box(Modifier.offset(cw * c.x, ch * c.y).size(cw * c.w, ch * c.h), contentAlignment = Alignment.Center) {
-                    if (c.key.startsWith("s:")) ShortcutTile(apps, c.key, if (prefs.labels) Fg else null, icon)
-                    else if (c.key.startsWith("f:")) FolderTile(apps, c.key, if (prefs.labels) Fg else null, icon)
-                    else apps.byKey(c.key)?.let { AppTile(apps, it, if (prefs.labels) Fg else null, icon, drag = "grid") }
+                    if (c.key.startsWith("s:")) ShortcutTile(apps, c.key, if (prefs.labels) WallFg else null, icon)
+                    else if (c.key.startsWith("f:")) FolderTile(apps, c.key, if (prefs.labels) WallFg else null, icon)
+                    else apps.byKey(c.key)?.let { AppTile(apps, it, if (prefs.labels) WallFg else null, icon, drag = "grid") }
                 } else {
                     val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
                     val now by rememberUpdatedState(c)
@@ -329,10 +329,10 @@ internal fun Clock(modifier: Modifier = Modifier) = BoxWithConstraints(modifier)
     // 92sp when there's room, smaller in a short or narrow cell block.
     val size = with(LocalDensity.current) { minOf(92.dp, (maxHeight - 30.dp).coerceAtLeast(16.dp), maxWidth / 2.8f).toSp() }
     Column(Modifier.padding(horizontal = 8.dp).align(Alignment.CenterStart), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(DateFormat.format("EEE d MMM", now).toString().uppercase(), style = shadowed(), color = Muted, fontSize = 12.sp,
+        Text(DateFormat.format("EEE d MMM", now).toString().uppercase(), style = shadowed(), color = WallMuted, fontSize = 12.sp,
             fontFamily = Mono, letterSpacing = 0.14.em)
         // AM/PM would not fit at this size; the status bar already shows it.
-        Text(DateFormat.format(if (DateFormat.is24HourFormat(context)) "H:mm" else "h:mm", now).toString(), style = shadowed(),
+        Text(DateFormat.format(if (DateFormat.is24HourFormat(context)) "H:mm" else "h:mm", now).toString(), style = shadowed(), color = WallFg,
             fontSize = size, fontWeight = FontWeight.Light, letterSpacing = (-0.045).em, lineHeight = size)
     }
 }
@@ -365,7 +365,7 @@ internal fun MicButton(onText: (String) -> Unit) {
         r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let(onText)
     }
     Box(
-        Modifier.size(40.dp).clip(CircleShape).background(Color(0xFF2A2D33)).clickable {
+        Modifier.size(40.dp).clip(CircleShape).background(FieldLine).clickable {
             runCatching { speech.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)) }
                 .onFailure { Toast.makeText(context, "No voice input available", Toast.LENGTH_SHORT).show() }
         },
@@ -399,8 +399,8 @@ internal fun WidgetPicker(apps: Apps, widgets: Widgets, only: String?, onClose: 
         .clickable(interactionSource = null, indication = null, onClick = onClose)) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.86f)
-                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).background(Color(0xFF15171B))
-                .border(1.dp, Color(0xFF2A2D33), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).background(Card)
+                .border(1.dp, FieldLine, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .clickable(interactionSource = null, indication = null) {}
                 .navigationBarsPadding().imePadding().padding(start = 16.dp, end = 16.dp, top = 10.dp)
         ) {
@@ -430,7 +430,11 @@ internal fun WidgetPicker(apps: Apps, widgets: Widgets, only: String?, onClose: 
                                 if (!apps.addBuiltin(b.kind)) Toast.makeText(context, "No room for this widget on the page", Toast.LENGTH_SHORT).show()
                                 onClose()
                             }) {
-                            BuiltinWidget(Cell("b:${b.kind}:preview", 0, 0, w, h), Modifier.fillMaxSize(), preview = true)
+                            // The clock and next event draw light text for the wallpaper; a grey stand-in keeps them readable on a light sheet.
+                            val wall = isLight && (b.kind == "clock" || b.kind == "event")
+                            Box(if (wall) Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)).background(Color(0xFF77736C)) else Modifier) {
+                                BuiltinWidget(Cell("b:${b.kind}:preview", 0, 0, w, h), Modifier.fillMaxSize(), preview = true)
+                            }
                         }
                     }
                 }
@@ -521,7 +525,7 @@ internal fun WidgetPreview(
     ) {
         Box(
             Modifier.fillMaxWidth().height(96.dp).clip(RoundedCornerShape(16.dp)).background(FieldBg)
-                .border(1.dp, Color(0xFF2A2D33), RoundedCornerShape(16.dp)).padding(8.dp),
+                .border(1.dp, FieldLine, RoundedCornerShape(16.dp)).padding(8.dp),
             contentAlignment = Alignment.Center,
         ) { sample() }
         Row(Modifier.fillMaxWidth()) {
