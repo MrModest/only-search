@@ -128,10 +128,12 @@ internal const val MaxColumns = 10
 internal const val MaxRows = 14
 
 /** Every launcher pref as typed JSON ({"key": {"t": "s|i|l|b|f", "v": …}}), minus cached currency rates. */
-internal fun backupJson(): String {
+internal fun backupJson(): String = backupJson(prefs.sp.all)
+
+internal fun backupJson(all: Map<String, *>): String {
     val out = org.json.JSONObject().put("app", "only-search").put("version", 1)
     val data = org.json.JSONObject()
-    prefs.sp.all.forEach { (k, v) ->
+    all.forEach { (k, v) ->
         if (k == "rates" || k == "ratesAt") return@forEach
         val t = when (v) { is String -> "s"; is Int -> "i"; is Long -> "l"; is Boolean -> "b"; is Float -> "f"; else -> return@forEach }
         data.put(k, org.json.JSONObject().put("t", t).put("v", v))
@@ -141,22 +143,39 @@ internal fun backupJson(): String {
 
 /** Replaces all launcher prefs with the backup's. Throws on a file that isn't one of ours. */
 internal fun restoreJson(json: String) {
+    val values = parseBackup(json)
+    prefs.sp.edit(commit = true) {
+        clear()
+        values.forEach { (k, v) ->
+            when (v) {
+                is String -> putString(k, v)
+                is Int -> putInt(k, v)
+                is Long -> putLong(k, v)
+                is Boolean -> putBoolean(k, v)
+                is Float -> putFloat(k, v)
+            }
+        }
+    }
+}
+
+/** The typed values of a backup; validates the file (and the layout prefs) before anything is written. */
+internal fun parseBackup(json: String): Map<String, Any> {
     val root = org.json.JSONObject(json)
     require(root.optString("app") == "only-search") { "Not an Only Search backup" }
     val data = root.getJSONObject("prefs")
     val entries = data.keys().asSequence().associateWith { data.getJSONObject(it) }
-    val writes = entries.map { (k, e) ->
+    val values = entries.mapValues { (_, e) ->
         when (e.getString("t")) {
-            "s" -> e.getString("v").let { v -> { ed: SharedPreferences.Editor -> ed.putString(k, v) } }
-            "i" -> e.getInt("v").let { v -> { ed: SharedPreferences.Editor -> ed.putInt(k, v) } }
-            "l" -> e.getLong("v").let { v -> { ed: SharedPreferences.Editor -> ed.putLong(k, v) } }
-            "b" -> e.getBoolean("v").let { v -> { ed: SharedPreferences.Editor -> ed.putBoolean(k, v) } }
-            "f" -> e.getDouble("v").toFloat().let { v -> { ed: SharedPreferences.Editor -> ed.putFloat(k, v) } }
+            "s" -> e.getString("v")
+            "i" -> e.getInt("v")
+            "l" -> e.getLong("v")
+            "b" -> e.getBoolean("v")
+            "f" -> e.getDouble("v").toFloat()
             else -> throw IllegalArgumentException("Unknown value type")
         }
     }
-    entries["pages"]?.let { parsePages(it.getString("v")) }
-    entries["folders"]?.let { parseFolders(it.getString("v")) }
-    entries["groups"]?.let { parseGroups(it.getString("v")) }
-    prefs.sp.edit(commit = true) { clear(); writes.forEach { it(this) } }
+    (values["pages"] as? String)?.let(::parsePages)
+    (values["folders"] as? String)?.let(::parseFolders)
+    (values["groups"] as? String)?.let(::parseGroups)
+    return values
 }
