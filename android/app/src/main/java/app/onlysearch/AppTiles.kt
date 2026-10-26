@@ -42,6 +42,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
 import android.appwidget.AppWidgetManager
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.unit.roundToIntRect
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -81,7 +82,7 @@ internal fun rememberLaunchSource(): Triple<Modifier, () -> LaunchSource, () -> 
     var screen by remember { mutableStateOf(Rect.Zero) }
     return Triple(
         Modifier.onGloballyPositioned { coords[0] = it; screen = Rect(it.localToScreen(Offset.Zero), it.size.toSize()) },
-        { LaunchSource(view, (coords[0]?.takeIf { it.isAttached }?.boundsInWindow() ?: Rect.Zero).toAndroidRect()) }, { screen },
+        { LaunchSource(view, (coords[0]?.takeIf { it.isAttached }?.boundsInWindow() ?: Rect.Zero).roundToIntRect().toAndroidRect()) }, { screen },
     )
 }
 
@@ -124,7 +125,7 @@ internal fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifie
                         onDragStart = if (!canDrag) null else { _, at ->
                             menu = false
                             val px = size.toPx()
-                            dnd.start(Dragged(app.key, prefs.appSpan, prefs.appSpan, drag!!, Offset(px / 2, px / 2), Size(px, px)), at)
+                            dnd.start(Dragged(app.key, prefs.appSpan, prefs.appSpan, drag, Offset(px / 2, px / 2), Size(px, px)), at)
                         },
                         onDrag = dnd::move, onDragEnd = dnd::end,
                     )

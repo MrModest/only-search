@@ -27,7 +27,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
@@ -53,9 +53,9 @@ fun EditHome(apps: Apps, widgets: Widgets, onDone: (Int) -> Unit, onPickWidget: 
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val state = rememberPagerState(apps.currentPage) { apps.pages.size + 1 }
-    val config = LocalConfiguration.current
-    val previewW = (config.screenWidthDp * 0.6f).dp
-    val previewH = (config.screenHeightDp * 0.6f).dp
+    val screen = LocalWindowInfo.current.containerDpSize
+    val previewW = screen.width * 0.6f
+    val previewH = screen.height * 0.6f
     val onPage = state.currentPage < apps.pages.size
     LaunchedEffect(state.currentPage) { if (onPage) apps.currentPage = state.currentPage }
     fun locked() = prefs.lockLayout.also { if (it) Toast.makeText(context, "Layout is locked (Settings › Home screen)", Toast.LENGTH_SHORT).show() }
@@ -72,7 +72,7 @@ fun EditHome(apps: Apps, widgets: Widgets, onDone: (Int) -> Unit, onPickWidget: 
         Spacer(Modifier.weight(1f))
         HorizontalPager(
             state, Modifier.fillMaxWidth().height(previewH),
-            contentPadding = PaddingValues(horizontal = (config.screenWidthDp.dp - previewW) / 2), pageSpacing = 12.dp,
+            contentPadding = PaddingValues(horizontal = (screen.width - previewW) / 2), pageSpacing = 12.dp,
             key = { apps.pages.getOrNull(it)?.id ?: -1L },
         ) { i ->
             val page = apps.pages.getOrNull(i)

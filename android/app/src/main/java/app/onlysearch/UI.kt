@@ -52,7 +52,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -77,7 +77,7 @@ fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: I
     BackHandler(true) {} // lowest priority: Back on home must not finish the launcher
     val scope = rememberCoroutineScope()
     val activity = LocalContext.current as Activity
-    val screenPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    val screenPx = LocalWindowInfo.current.containerSize.height.toFloat()
 
     val drawer = remember { Animatable(0f) } // 0 = closed, 1 = open; follows the finger while dragging
     val enter = remember { Animatable(1f) } // home "icons zoom back in" after returning from an app
@@ -230,7 +230,7 @@ fun Launcher(apps: Apps, widgets: Widgets, home: Pair<Int, Boolean>, stopTick: I
     }
     // Dragging to a screen edge flips to the neighbouring page.
     val edgePx = with(LocalDensity.current) { 28.dp.toPx() }
-    val widthPx = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+    val widthPx = LocalWindowInfo.current.containerSize.width.toFloat()
     LaunchedEffect(dnd.item != null) {
         while (dnd.item != null) {
             delay(500)

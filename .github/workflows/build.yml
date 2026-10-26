@@ -53,10 +53,9 @@ jobs:
         run: bridge/build.sh
 
       - uses: gradle/actions/setup-gradle@v4
-        with: { gradle-version: 8.11.1 }
 
       - name: JVM unit tests
-        run: gradle -p android testReleaseUnitTest --no-daemon
+        run: android/gradlew -p android testReleaseUnitTest --no-daemon
 
       - name: Build APKs
         env:
@@ -65,7 +64,7 @@ jobs:
         run: |
           echo "$RELEASE_KEYSTORE_B64" | base64 -d > $RUNNER_TEMP/release.p12
           export RELEASE_KEYSTORE=$RUNNER_TEMP/release.p12
-          gradle -p android assembleRelease assembleReleaseAndroidTest --no-daemon
+          android/gradlew -p android assembleRelease assembleReleaseAndroidTest --no-daemon
           $ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)/apksigner verify --print-certs android/app/build/outputs/apk/release/app-arm64-v8a-release.apk | head -3
 
       - name: APK sizes

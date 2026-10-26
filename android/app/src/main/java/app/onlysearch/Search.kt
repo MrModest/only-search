@@ -2,6 +2,8 @@
 
 package app.onlysearch
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -32,12 +34,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -60,7 +60,6 @@ internal val Examples = listOf("20% of 450", "5 km in mi", "time in Tokyo", "\$4
 @Composable
 internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Unit, onQuery: (String) -> Unit) {
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
     var calc by remember { mutableStateOf<Calc?>(null) }
     val currentQuery by rememberUpdatedState(query)
     LaunchedEffect(Unit) {
@@ -94,7 +93,7 @@ internal fun SearchScreen(apps: Apps, query: String, onSettings: (String) -> Uni
     val shortcuts = loadedShortcuts.second.takeIf { loadedShortcuts.first == topApp?.key }.orEmpty()
     val copy = { c: Calc ->
         val text = if (prefs.enterCopies == "both") "${c.expression} = ${c.result}" else c.result
-        clipboard.setText(AnnotatedString(text)); apps.remember(c.expression, c.result)
+        context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(text, text)); apps.remember(c.expression, c.result)
         Toast.makeText(context, "Copied $text", Toast.LENGTH_SHORT).show()
     }
     val go = {

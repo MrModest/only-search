@@ -40,7 +40,7 @@ import androidx.compose.ui.window.Dialog
 import java.util.Calendar
 import java.util.Date
 import java.util.TimeZone
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.repeatOnLifecycle

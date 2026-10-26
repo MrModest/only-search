@@ -31,7 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -109,6 +109,7 @@ private fun FolderSheet(apps: Apps, key: String, icon: Dp, cell: Dp, onClose: ()
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
+    val maxHeight = LocalWindowInfo.current.containerDpSize.height * 0.7f
     BackHandler { save(); onClose() }
     Popup(popupPositionProvider = OverAnchor, onDismissRequest = { save(); onClose() }, properties = PopupProperties(focusable = true)) {
         ProvideTextStyle(TextStyle(fontFamily = Sans, color = Fg)) {
@@ -121,7 +122,7 @@ private fun FolderSheet(apps: Apps, key: String, icon: Dp, cell: Dp, onClose: ()
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 // Long-press drags out; an immediate vertical swipe scrolls. The name field stays below, outside the scroll.
-                Box(Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.7f).dp).verticalScroll(rememberScrollState())) {
+                Box(Modifier.heightIn(max = maxHeight).verticalScroll(rememberScrollState())) {
                     AppGrid(apps, list, icon, Fg, columns = columns, rowGap = 16.dp, drag = from)
                 }
                 Field(name, { name = it }, "Folder name", Modifier.fillMaxWidth(), autoFocus = false, fontSize = 17, align = TextAlign.Center) { save() }
