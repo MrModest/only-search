@@ -58,7 +58,7 @@ internal fun FolderTile(apps: Apps, key: String, labelColor: Color?, size: Dp) {
                     { coords[0] }, onTap = { open = true }, onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
                     onDragStart = if (prefs.lockLayout) null else { _, at ->
                         val px = size.toPx()
-                        dnd.start(Dragged(key, prefs.appSpan, prefs.appSpan, "grid", Offset(px / 2, px / 2), Size(px, px)), at)
+                        dnd.start(Dragged(key, AppSpan, AppSpan, "grid", Offset(px / 2, px / 2), Size(px, px)), at)
                     },
                     onDrag = dnd::move, onDragEnd = dnd::end,
                 )

@@ -81,11 +81,10 @@ private fun importNova(context: Context, db: SQLiteDatabase, novaPrefs: Map<Stri
             c.getDouble(5), c.getDouble(6), c.getDouble(7), c.getDouble(8), c.getInt(9), c.getString(10), c.getInt(11))
     }
     val desktop = items.filter { it.container == -100L }
-    // "7x5 subgrid" = rows × columns. Half-cell positions need a grid twice as fine (the user's choice).
-    val (rows, cols) = novaPrefs["desktop_grid"]?.let { Regex("(\\d+)x(\\d+)").find(it)?.destructured }?.let { (r, c) -> r.toInt() to c.toInt() } ?: (prefs.rows to prefs.columns)
-    val half = desktop.any { listOf(it.x, it.y, it.w, it.h).any { v -> v % 1.0 != 0.0 } }
-    val f = if (half) 2 else 1
-    fun cell(v: Double) = Math.round(v * f).toInt()
+    // "7x5 subgrid" = rows × columns, in Nova cells; ours are half cells, which also hold Nova's half-cell positions.
+    val (rows, cols) = novaPrefs["desktop_grid"]?.let { Regex("(\\d+)x(\\d+)").find(it)?.destructured }?.let { (r, c) -> r.toInt() to c.toInt() }
+        ?: (prefs.rows / AppSpan to prefs.columns / AppSpan)
+    fun cell(v: Double) = Math.round(v * AppSpan).toInt()
 
     // Folders: an itemType 2 row on the desktop; its apps have container = the folder's _id.
     val folders = mutableMapOf<String, Folder>()
@@ -114,7 +113,7 @@ private fun importNova(context: Context, db: SQLiteDatabase, novaPrefs: Map<Stri
                     }
                     else -> null
                 } ?: return@forEach
-                val (w, h) = if (it.type == 4) cell(it.w) to cell(it.h) else f to f
+                val (w, h) = if (it.type == 4) cell(it.w) to cell(it.h) else AppSpan to AppSpan
                 put(JSONObject().put("k", key).put("x", x).put("y", y).put("w", w).put("h", h))
             }
         })
@@ -151,6 +150,7 @@ private fun importNova(context: Context, db: SQLiteDatabase, novaPrefs: Map<Stri
         labels.forEach { (k, title) -> putString("label:$k", title) }
         putString("novaWidgets", widgetQueue.toString())
         putBoolean("builtins", true)
+        putInt("set.appSpan", AppSpan)
         putBoolean("seeded", true)
     }
     // "Exported Icon Pack:GO:ginlemon.iconpackstudio.exported:false" = name : type : package : …
@@ -160,9 +160,8 @@ private fun importNova(context: Context, db: SQLiteDatabase, novaPrefs: Map<Stri
         novaPrefs[nova]?.let { novaAction(it) { intent -> keyOfIntent(intent, -1) } }?.let { ours to it }
     }
     return {
-        prefs.columns = (cols * f).coerceIn(3, MaxColumns)
-        prefs.rows = (rows * f).coerceIn(1, MaxRows)
-        prefs.appSpan = f
+        prefs.columns = (cols * AppSpan).coerceIn(3 * AppSpan, MaxColumns)
+        prefs.rows = (rows * AppSpan).coerceIn(AppSpan, MaxRows)
         novaPrefs["dock_grid_cols"]?.toIntOrNull()?.let { prefs.dockSize = it.coerceIn(3, 6) }
         novaPrefs["dock_enable"]?.let { prefs.showDock = it == "true" }
         novaPrefs["searchbar_placement"]?.let { prefs.searchBar = when { it.startsWith("DOCK_ABOVE") -> "above"; it.startsWith("DOCK_BELOW") -> "bottom"; it.contains("TOP") -> "top"; else -> prefs.searchBar } }

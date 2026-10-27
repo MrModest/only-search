@@ -272,7 +272,7 @@ internal fun TopHit(apps: Apps, app: App, range: IntRange?, shortcuts: List<Shor
                         onDragStart = { _, at ->
                             menu = false
                             val px = 52.dp.toPx()
-                            dnd.start(Dragged(app.key, prefs.appSpan, prefs.appSpan, "search", Offset(px / 2, px / 2), Size(px, px)), at)
+                            dnd.start(Dragged(app.key, AppSpan, AppSpan, "search", Offset(px / 2, px / 2), Size(px, px)), at)
                         },
                         onDrag = dnd::move, onDragEnd = dnd::end,
                     )

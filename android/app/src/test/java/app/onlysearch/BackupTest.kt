@@ -81,3 +81,43 @@ class ParseLayoutTest {
         assertThrows(Exception::class.java) { parseFolders("""{"f:1":{"apps":[]}}""") }
     }
 }
+
+class FineGridTest {
+    private val pagesJson = """[{"items":[{"k":"a","x":1,"y":5,"w":1,"h":1},{"k":"w:3","x":0,"y":0,"w":4,"h":2}]},{"items":[{"k":"f:1","x":3,"y":2,"w":1,"h":1}]}]"""
+
+    @Test fun oldLayoutIsDoubledAndMarked() {
+        val out = fineGrid(mapOf("set.columns" to 5, "set.rows" to 7, "set.appSpan" to 1, "pages" to pagesJson, "dock" to "a\nb"))
+        assertEquals(10, out["set.columns"])
+        assertEquals(14, out["set.rows"])
+        assertEquals(2, out["set.appSpan"])
+        assertEquals("a\nb", out["dock"])
+        val pages = parsePages(out["pages"] as String)
+        assertEquals(listOf(Cell("a", 2, 10, 2, 2), Cell("w:3", 0, 0, 8, 4)), pages[0].items)
+        assertEquals(listOf(Cell("f:1", 6, 4, 2, 2)), pages[1].items)
+    }
+
+    @Test fun missingSizesAndMarkerUseTheOldDefaults() {
+        val out = fineGrid(mapOf("pages" to pagesJson))
+        assertEquals(8, out["set.columns"])
+        assertEquals(12, out["set.rows"])
+        assertEquals(2, out["set.appSpan"])
+        assertEquals(Cell("a", 2, 10, 2, 2), parsePages(out["pages"] as String)[0].items[0])
+    }
+
+    @Test fun freshInstallGetsTheDefaultGrid() {
+        assertEquals(mapOf("set.columns" to 8, "set.rows" to 12, "set.appSpan" to 2), fineGrid(emptyMap()))
+    }
+
+    @Test fun markedLayoutStaysAsItIsAndMigrationRunsOnce() {
+        val fine = mapOf("set.columns" to 9, "set.rows" to 13, "set.appSpan" to 2, "pages" to pagesJson)
+        assertEquals(fine, fineGrid(fine))
+        val once = fineGrid(mapOf("set.columns" to 4, "pages" to pagesJson))
+        assertEquals(once, fineGrid(once))
+    }
+
+    @Test fun oldBackupRestoresDoubled() {
+        val out = fineGrid(parseBackup(backupJson(mapOf("set.columns" to 4, "set.rows" to 6, "pages" to pagesJson))))
+        assertEquals(8, out["set.columns"])
+        assertEquals(Cell("w:3", 0, 0, 8, 4), parsePages(out["pages"] as String)[0].items[1])
+    }
+}

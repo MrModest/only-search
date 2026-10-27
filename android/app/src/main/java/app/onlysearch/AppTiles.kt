@@ -125,7 +125,7 @@ internal fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifie
                         onDragStart = if (!canDrag) null else { _, at ->
                             menu = false
                             val px = size.toPx()
-                            dnd.start(Dragged(app.key, prefs.appSpan, prefs.appSpan, drag, Offset(px / 2, px / 2), Size(px, px)), at)
+                            dnd.start(Dragged(app.key, AppSpan, AppSpan, drag, Offset(px / 2, px / 2), Size(px, px)), at)
                         },
                         onDrag = dnd::move, onDragEnd = dnd::end,
                     )
@@ -171,7 +171,7 @@ internal fun ShortcutTile(apps: Apps, key: String, labelColor: Color?, size: Dp)
                     onDragStart = if (prefs.lockLayout) null else { _, at ->
                         menu = false
                         val px = size.toPx()
-                        dnd.start(Dragged(key, prefs.appSpan, prefs.appSpan, "grid", Offset(px / 2, px / 2), Size(px, px), icon), at)
+                        dnd.start(Dragged(key, AppSpan, AppSpan, "grid", Offset(px / 2, px / 2), Size(px, px), icon), at)
                     },
                     onDrag = dnd::move, onDragEnd = dnd::end,
                 )
@@ -350,7 +350,7 @@ private fun ShortcutRow(apps: Apps, s: Shortcut, icon: ImageBitmap?, onDragging:
                         if (!dragging && !prefs.lockLayout && (c.position - down.position).getDistance() > viewConfiguration.touchSlop) {
                             dragging = true; onDragging(true)
                             val px = (58.dp * prefs.iconSize / 100).toPx()
-                            dnd.start(Dragged(apps.shortcutKey(s), prefs.appSpan, prefs.appSpan, "popup", Offset(px / 2, px / 2), Size(px, px), icon), at)
+                            dnd.start(Dragged(apps.shortcutKey(s), AppSpan, AppSpan, "popup", Offset(px / 2, px / 2), Size(px, px), icon), at)
                         }
                         if (dragging) { c.consume(); dnd.move(at) }
                     }

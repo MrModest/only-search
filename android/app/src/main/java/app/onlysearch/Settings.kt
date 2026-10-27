@@ -93,7 +93,7 @@ private fun settingsPages(apps: Apps): List<Page> = listOf(
     Page("sources", "Search", SIc.sources, true, "Sources & ranking",
         { (listOf("Apps") + listOfNotNull("contacts".takeIf { prefs.srcContacts }, "settings".takeIf { prefs.srcSettings }, "web".takeIf { prefs.srcWeb })).joinToString(", ") },
         "contacts people settings web engine google duckduckgo fuzzy frequent ranking") { SourcesSettings() },
-    Page("home", "Layout", SIc.home, false, "Home screen", { "Grid ${prefs.columns} × ${prefs.rows} · icons ${prefs.iconSize}%" },
+    Page("home", "Layout", SIc.home, false, "Home screen", { "Grid ${prefs.columns / AppSpan} × ${prefs.rows / AppSpan} · icons ${prefs.iconSize}%" },
         "columns rows grid icon size shape labels lock layout") { HomeSettings() },
     Page("dock", "Layout", SIc.dock, false, "Dock & search bar",
         { (if (prefs.showDock) "${prefs.dockSize} icons" else "no dock") + " · " + SearchBars.first { it.first == prefs.searchBar }.third },
@@ -266,10 +266,11 @@ private fun ValueMenu(title: String, value: String, options: List<Pair<String, S
 
 @Composable
 private fun HomeSettings() {
+    // Shown in app cells; the grid underneath is in half cells, and an odd half cell left over rounds down.
     HomePreview()
     Group(null, listOf(
-        { Stepper("Columns", prefs.columns, 3..MaxColumns) { prefs.columns = it } },
-        { Stepper("Rows", prefs.rows, 1..MaxRows) { prefs.rows = it } },
+        { Stepper("Columns", prefs.columns / AppSpan, 3..MaxColumns / AppSpan) { prefs.columns = it * AppSpan } },
+        { Stepper("Rows", prefs.rows / AppSpan, 1..MaxRows / AppSpan) { prefs.rows = it * AppSpan } },
         {
             Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row {
@@ -316,11 +317,12 @@ private fun HomePreview() {
     ) {
         Text(DateFormat.format("h:mm", Date()).toString(), fontSize = 30.sp, fontWeight = FontWeight.Light, letterSpacing = (-0.04).em)
         Spacer(Modifier.weight(1f))
-        val cell = 26.dp * prefs.iconSize / 100 * 4 / maxOf(4, prefs.columns)
+        val columns = prefs.columns / AppSpan
+        val cell = 26.dp * prefs.iconSize / 100 * 4 / maxOf(4, columns)
         Column(verticalArrangement = Arrangement.spacedBy(if (prefs.labels) 8.dp else 5.dp)) {
-            repeat(minOf(prefs.rows, 3)) {
+            repeat(minOf(prefs.rows / AppSpan, 3)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    repeat(prefs.columns) {
+                    repeat(columns) {
                         Box(Modifier.size(cell).clip(iconShape(prefs.iconShape, cell)).background(Divider)
                             .border(1.dp, PillLine, iconShape(prefs.iconShape, cell)))
                     }

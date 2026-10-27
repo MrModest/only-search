@@ -207,20 +207,20 @@ class Apps(private val context: Context) {
     fun toggleHome(app: App) {
         if (onHome(app)) return removeItem(app.key)
         for (p in (listOf(currentPage) + pages.indices).filter { it in pages.indices }) {
-            val (x, y) = freeSpot(p, 1, 1, fromBottom = true) ?: continue
-            place(p, Cell(app.key, x, y)); return
+            val (x, y) = freeSpot(p, AppSpan, AppSpan, fromBottom = true) ?: continue
+            place(p, Cell(app.key, x, y, AppSpan, AppSpan)); return
         }
     }
 
     /** Where the next bound widget goes, if it was dropped on a spot. */
     var widgetSpot: Pair<Int, Cell>? = null
 
-    /** Puts a newly bound widget on the page; false if there's no room for it. */
+    /** Puts a newly bound widget of w×h app cells on the page; false if there's no room for it. */
     fun addWidget(id: Int, w: Int, h: Int): Boolean {
         val spot = widgetSpot.also { widgetSpot = null }
         if (spot != null && place(spot.first, spot.second.copy(key = "w:$id"))) return true
         val p = currentPage.coerceIn(pages.indices)
-        val cw = w.coerceAtMost(prefs.columns); val ch = h.coerceAtMost(prefs.rows)
+        val cw = (w * AppSpan).coerceAtMost(prefs.columns); val ch = (h * AppSpan).coerceAtMost(prefs.rows)
         val (x, y) = freeSpot(p, cw, ch, fromBottom = false) ?: return false
         return place(p, Cell("w:$id", x, y, cw, ch))
     }
@@ -239,7 +239,8 @@ class Apps(private val context: Context) {
     private fun migrateBuiltins() {
         val cols = prefs.columns
         val shifts = pages.indices.map { p ->
-            val add = listOfNotNull("clock" to 2, ("event" to 1).takeIf { prefs.nextEvent }, ("today" to 2).takeIf { prefs.todayCard && p == defaultPage })
+            val add = listOfNotNull("clock", "event".takeIf { prefs.nextEvent }, "today".takeIf { prefs.todayCard && p == defaultPage })
+                .map { kind -> kind to Builtins.first { it.kind == kind }.size().second }
             var y = 0
             val cells = add.map { (kind, h) -> Cell("b:$kind:$p", 0, y, cols, h).also { y += h } }
             pages[p] = pages[p].copy(items = cells + pages[p].items.map { it.copy(y = it.y + y) })
@@ -299,12 +300,12 @@ class Apps(private val context: Context) {
     // Before pages there was one "home" list (apps sat in the bottom rows) and one "widgets" list (stacked at the top).
     private fun loadPages(): List<HomePage> {
         val json = sp.getString("pages", null) ?: run {
-            val cols = prefs.columns; val rows = prefs.rows
+            val cols = prefs.columns / AppSpan; val rows = prefs.rows / AppSpan; val s = AppSpan
             val apps = sp.list("home").take(cols * rows)
             val top = rows - (apps.size + cols - 1) / cols
             val widgets = sp.getString("widgets", "")!!.split(",").mapNotNull { it.toIntOrNull() }
-                .take(top / 2).mapIndexed { i, id -> Cell("w:$id", 0, i * 2, cols, 2) }
-            return listOf(HomePage(widgets + apps.mapIndexed { i, k -> Cell(k, i % cols, top + i / cols) }))
+                .take(top / 2).mapIndexed { i, id -> Cell("w:$id", 0, i * 2 * s, cols * s, 2 * s) }
+            return listOf(HomePage(widgets + apps.mapIndexed { i, k -> Cell(k, i % cols * s, (top + i / cols) * s, s, s) }))
         }
         return parsePages(json)
     }
@@ -349,7 +350,7 @@ class Apps(private val context: Context) {
 
     fun renameFolder(key: String, name: String) { folders[key]?.let { saveFolder(key, it.copy(name = name)) } }
 
-    /** [app] dropped on [over] (an app or a folder at a 1×1 cell): joins the folder, or both become a new folder in that cell. False if nothing changed. */
+    /** [app] dropped on [over] (an app or a folder): joins the folder, or both become a new folder in that cell. False if nothing changed. */
     fun dropOnto(page: Int, over: Cell, app: String): Boolean {
         if (over.key == app) return false
         if (over.key.startsWith("f:")) {

@@ -179,16 +179,16 @@ fun TodayCard(events: List<Event>, modifier: Modifier = Modifier) {
     }
 }
 
-/** Widgets drawn by the launcher itself, offered at the top of the widget picker. */
+/** Widgets drawn by the launcher itself, offered at the top of the widget picker. Sizes are in half cells. */
 internal class Builtin(val kind: String, val label: String, val minW: Int, val minH: Int, val size: () -> Pair<Int, Int>) {
     val agenda get() = kind != "clock"
 }
 
 internal val Builtins = listOf(
-    Builtin("clock", "Clock", 2, 1) { prefs.columns to 2 },
-    Builtin("event", "Next event", 2, 1) { prefs.columns to 1 },
-    Builtin("today", "Today", 2, 2) { prefs.columns to 2 },
-    Builtin("day", "Day", 2, 3) { prefs.columns to prefs.rows },
+    Builtin("clock", "Clock", 2 * AppSpan, AppSpan) { prefs.columns to 2 * AppSpan },
+    Builtin("event", "Next event", 2 * AppSpan, AppSpan) { prefs.columns to AppSpan },
+    Builtin("today", "Today", 2 * AppSpan, 2 * AppSpan) { prefs.columns to 2 * AppSpan },
+    Builtin("day", "Day", 2 * AppSpan, 3 * AppSpan) { prefs.columns to prefs.rows },
 )
 
 /** A built-in widget's content. Agenda widgets ask for calendar access in place and show only the calendars picked for them. */

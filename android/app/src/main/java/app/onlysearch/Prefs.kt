@@ -12,7 +12,10 @@ import kotlin.reflect.KProperty
 /** User settings. Compose-observable; each change is saved to the launcher prefs straight away. */
 class Prefs(context: Context) {
     val sp: SharedPreferences = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
-    private val saved = sp.all // one copy for all the initial reads
+    // One copy for all the initial reads, after a layout from before the half-cell grid is converted to it.
+    private val saved = sp.all.let { all ->
+        fineGrid(all).also { fine -> if (fine != all) sp.edit(commit = true) { fine.forEach { (k, v) -> if (all[k] != v) put(k, v) } } }
+    }
 
     private inner class P<T>(private val key: String, def: T, clamp: (T) -> T = { it }) : ReadWriteProperty<Any?, T> {
         @Suppress("UNCHECKED_CAST")
@@ -31,14 +34,13 @@ class Prefs(context: Context) {
     }
 
     // Home screen
-    var columns by P("set.columns", 4) { it.coerceIn(3, MaxColumns) }
-    var rows by P("set.rows", 6) { it.coerceIn(1, MaxRows) }
+    /** Grid size in half cells; an app takes [AppSpan] × [AppSpan]. */
+    var columns by P("set.columns", 4 * AppSpan) { it.coerceIn(3 * AppSpan, MaxColumns) }
+    var rows by P("set.rows", 6 * AppSpan) { it.coerceIn(AppSpan, MaxRows) }
     var iconSize by P("set.iconSize", 100)
     var iconShape by P("set.iconShape", "squircle")
     var labels by P("set.labels", true)
     var lockLayout by P("set.lockLayout", false)
-    /** Cells an app takes each way; 2 on a grid imported from Nova's half-cell layout. */
-    var appSpan by P("set.appSpan", 1)
     var nextEvent by P("set.nextEvent", false)
     var todayCard by P("set.todayCard", false)
 
@@ -127,9 +129,41 @@ class Prefs(context: Context) {
 
 lateinit var prefs: Prefs
 
-// The Nova import can need a 10 × 14 grid (Nova's 5 × 7 with half cells).
-internal const val MaxColumns = 10
-internal const val MaxRows = 14
+/** Half cells an app takes each way: the home grid is twice as fine as its app cells, so widgets can move and size by half cells. */
+internal const val AppSpan = 2
+internal const val MaxColumns = 10 * AppSpan
+internal const val MaxRows = 14 * AppSpan
+
+/**
+ * Layouts saved before every grid had half cells ("set.appSpan" missing or 1) become half-cell ones: grid size and every
+ * home item ×2, so they look the same. "set.appSpan" = 2 marks the result; values already marked come back as they are.
+ */
+internal fun fineGrid(values: Map<String, Any?>): Map<String, Any?> {
+    if (values["set.appSpan"] == AppSpan) return values
+    val out = values.toMutableMap()
+    out["set.columns"] = ((values["set.columns"] as? Int) ?: 4) * AppSpan
+    out["set.rows"] = ((values["set.rows"] as? Int) ?: 6) * AppSpan
+    (values["pages"] as? String)?.let { json ->
+        val pages = org.json.JSONArray(json)
+        for (i in 0 until pages.length()) {
+            val items = pages.getJSONObject(i).getJSONArray("items")
+            for (j in 0 until items.length()) items.getJSONObject(j).let { o -> listOf("x", "y", "w", "h").forEach { o.put(it, o.getInt(it) * AppSpan) } }
+        }
+        out["pages"] = pages.toString()
+    }
+    out["set.appSpan"] = AppSpan
+    return out
+}
+
+private fun SharedPreferences.Editor.put(k: String, v: Any?) {
+    when (v) {
+        is String -> putString(k, v)
+        is Int -> putInt(k, v)
+        is Long -> putLong(k, v)
+        is Boolean -> putBoolean(k, v)
+        is Float -> putFloat(k, v)
+    }
+}
 
 /** Every launcher pref as typed JSON ({"key": {"t": "s|i|l|b|f", "v": …}}), minus cached currency rates. */
 internal fun backupJson(): String = backupJson(prefs.sp.all)
@@ -145,20 +179,12 @@ internal fun backupJson(all: Map<String, *>): String {
     return out.put("prefs", data).toString(2)
 }
 
-/** Replaces all launcher prefs with the backup's. Throws on a file that isn't one of ours. */
+/** Replaces all launcher prefs with the backup's (an older one's layout moved to half cells). Throws on a file that isn't one of ours. */
 internal fun restoreJson(json: String) {
-    val values = parseBackup(json)
+    val values = fineGrid(parseBackup(json))
     prefs.sp.edit(commit = true) {
         clear()
-        values.forEach { (k, v) ->
-            when (v) {
-                is String -> putString(k, v)
-                is Int -> putInt(k, v)
-                is Long -> putLong(k, v)
-                is Boolean -> putBoolean(k, v)
-                is Float -> putFloat(k, v)
-            }
-        }
+        values.forEach { (k, v) -> put(k, v) }
     }
 }
 

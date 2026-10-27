@@ -215,7 +215,7 @@ internal fun HomeGrid(apps: Apps, widgets: Widgets, index: Int, page: HomePage, 
         val cw = maxWidth / prefs.columns
         val ch = maxHeight / prefs.rows
         // Keep ~10dp between a label and the icon below it; small cells shrink the icon.
-        val icon = minOf(58.dp * prefs.iconSize / 100, cw * prefs.appSpan - 12.dp, ch * prefs.appSpan - if (prefs.labels) 34.dp else 10.dp).coerceAtLeast(0.dp)
+        val icon = minOf(58.dp * prefs.iconSize / 100, cw * AppSpan - 12.dp, ch * AppSpan - if (prefs.labels) 34.dp else 10.dp).coerceAtLeast(0.dp)
         // Derived so a pointer move only recomposes the page when the target cell changes.
         val target by remember(page.id) { derivedStateOf { dnd.item?.let { d -> dnd.grids[page.id]?.let { dnd.target(d, dnd.pos, it) } } } }
         val drop = target?.let { it to apps.fits(index, it.x, it.y, it.w, it.h, it.key) }
@@ -489,12 +489,12 @@ internal fun WidgetPreview(apps: Apps, p: AppWidgetProviderInfo, modifier: Modif
         }
     }
     val (w, h) = cells(p, density.density)
-    WidgetPreview(apps, pickerKey(p), p.loadLabel(context.packageManager), w, h, preview, modifier, onDragging, onDropped, onClick) {
+    WidgetPreview(apps, pickerKey(p), p.loadLabel(context.packageManager), w * AppSpan, h * AppSpan, preview, modifier, onDragging, onDropped, onClick) {
         preview?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
     }
 }
 
-/** A picker card: tap adds the widget, hold and drag places it. [key] is what the drop handler gets. */
+/** A picker card: tap adds the widget, hold and drag places it. [key] is what the drop handler gets; [w] × [h] are half cells. */
 @Composable
 internal fun WidgetPreview(
     apps: Apps, key: String, label: String, w: Int, h: Int, preview: ImageBitmap?, modifier: Modifier,
@@ -530,7 +530,7 @@ internal fun WidgetPreview(
         ) { sample() }
         Row(Modifier.fillMaxWidth()) {
             Text(label, color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("$w × $h", color = Muted, fontSize = 12.sp, fontFamily = Mono)
+            Text("${w / AppSpan} × ${h / AppSpan}", color = Muted, fontSize = 12.sp, fontFamily = Mono)
         }
     }
 }
