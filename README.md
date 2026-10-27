@@ -99,6 +99,8 @@ To go back to your old launcher, open the same Home app setting and choose it ag
 
 The Swift bridge to [SoulverCore](https://soulver.app/core) is built in GitHub Actions (`.github/workflows/build.yml`). Every push to `main` produces a signed APK and runs the emulator tests. See [docs/ANDROID.md](docs/ANDROID.md) for the pipeline and [docs/DESIGN.md](docs/DESIGN.md) for the design.
 
+`./local-build.sh [--install] [N]` builds a release-signed APK locally, fetching the key from 1Password.
+
 ## Credits
 
 **[SoulverCore](https://github.com/soulverteam/SoulverCore)** by Soulver ([soulver.app](https://soulver.app)) powers all calculations: sums, units, currencies, dates and time zones. Only Search uses the prebuilt Android libraries from [SoulverCore-Multiplatform](https://github.com/soulverteam/SoulverCore-Multiplatform).
