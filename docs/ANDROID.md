@@ -36,7 +36,8 @@ CI emulators: Android 14 (required) and Android 17 / 37.2 with 16 KB pages (best
 Releases are signed with a permanent PKCS12 key, alias `onlysearch`, certificate SHA-256 `a67aee0e…3cf3`.
 - Stored as GitHub secrets `RELEASE_KEYSTORE_B64` and `RELEASE_KEYSTORE_PASSWORD`.
 - Local backup: `~/.config/only-search/release.p12` + `release.password`. **Losing it means users must uninstall to update.**
-- versionCode = `GITHUB_RUN_NUMBER`, versionName `0.2.<run>`.
+- Version lives in `version.txt` (one integer N): versionCode = N, versionName `0.2.N`. CI and `local-build.sh` both read it.
+- Release: `echo $((N+1)) > version.txt`, commit, `git tag v0.2.<N+1>`, push the commit and tag. The build workflow fails on a `v*` tag that doesn't match `version.txt`.
 - Builds before v0.2.32 used per-run debug keys, so each of those needed an uninstall.
 
 ## Motion (Nova-inspired, v0.2.0)

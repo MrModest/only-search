@@ -12,9 +12,9 @@ android {
         applicationId = "app.onlysearch"
         minSdk = 28 // SoulverCore's Android build targets API 28
         targetSdk = 35
-        // CI run number, so every build installs as an update over the previous one.
-        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toInt() ?: 1
-        versionName = "0.2.${System.getenv("GITHUB_RUN_NUMBER") ?: "0"}"
+        val version = rootProject.file("../version.txt").readText().trim().toInt()
+        versionCode = version
+        versionName = "0.2.$version"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
