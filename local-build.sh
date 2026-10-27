@@ -32,7 +32,8 @@ export RELEASE_KEYSTORE="$tmp/release.p12" RELEASE_KEYSTORE_PASSWORD
 apk="$root/android/app/build/outputs/apk/release/app-arm64-v8a-release.apk"
 apksigner=$(ls -d "$sdk"/build-tools/*/ | sort -V | tail -1)apksigner
 certs=$("$apksigner" verify --print-certs "$apk") # set -e: a failed verify aborts here
-grep -qi "^Signer #1 certificate SHA-256 digest: $cert\$" <<<"$certs" || { echo "APK signer cert does not match pinned release cert $cert" >&2; exit 1; }
+signer=$(grep -i 'certificate SHA-256 digest:' <<<"$certs" | head -1 | sed 's/.*digest: *//' | tr 'A-F' 'a-f')
+[ "$signer" = "$cert" ] || { echo "APK signer cert does not match pinned release cert $cert" >&2; exit 1; }
 
 out=~/Downloads/only-search-0.2.$n-arm64.apk
 cp "$apk" "$out"
