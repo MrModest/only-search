@@ -13,7 +13,7 @@ for d in dirs:
 todo = list(os.listdir(out))
 while todo:
     lib = todo.pop()
-    dyn = subprocess.run(["readelf", "-d", os.path.join(out, lib)], capture_output=True, text=True, check=True).stdout
+    dyn = subprocess.run([os.environ.get("READELF", "readelf"), "-d", os.path.join(out, lib)], capture_output=True, text=True, check=True).stdout
     for line in dyn.splitlines():
         if "(NEEDED)" not in line:
             continue

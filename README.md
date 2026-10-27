@@ -97,9 +97,12 @@ To go back to your old launcher, open the same Home app setting and choose it ag
 
 ## For developers
 
-The Swift bridge to [SoulverCore](https://soulver.app/core) is built in GitHub Actions (`.github/workflows/build.yml`). Every push to `main` produces a signed APK and runs the emulator tests. See [docs/ANDROID.md](docs/ANDROID.md) for the pipeline and [docs/DESIGN.md](docs/DESIGN.md) for the design.
+```sh
+./setup.sh                                # once: pinned Swift toolchain, Swift SDK for Android, NDK
+cd android && ./gradlew assembleRelease   # also builds the Swift bridge to SoulverCore
+```
 
-`./local-build.sh [--install] [N]` builds a release-signed APK locally, fetching the key from 1Password.
+GitHub Actions (`.github/workflows/build.yml`) runs the same commands on every push and the emulator tests. `./local-build.sh [--install] [N]` builds a release-signed APK locally, fetching the key from 1Password. See [docs/ANDROID.md](docs/ANDROID.md) for the pipeline and [docs/DESIGN.md](docs/DESIGN.md) for the design.
 
 ## Credits
 

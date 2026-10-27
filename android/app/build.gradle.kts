@@ -73,3 +73,12 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
 }
+
+// Swift bridge → src/main/jniLibs + assets/soulver (both gitignored). Skipped when up to date; needs ../setup.sh once.
+val buildSoulverBridge = tasks.register<Exec>("buildSoulverBridge") {
+    val bridge = rootProject.file("../bridge")
+    inputs.files(fileTree(bridge) { include("Sources/**", "Package.swift", "*.sh", "*.py") })
+    outputs.dirs("src/main/jniLibs", "src/main/assets/soulver")
+    commandLine(bridge.resolve("build.sh"))
+}
+tasks.named("preBuild") { dependsOn(buildSoulverBridge) }
