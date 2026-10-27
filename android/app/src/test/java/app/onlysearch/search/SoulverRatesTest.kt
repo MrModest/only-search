@@ -1,4 +1,4 @@
-package app.onlysearch
+package app.onlysearch.search
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

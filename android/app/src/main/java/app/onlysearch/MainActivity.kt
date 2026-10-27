@@ -1,6 +1,7 @@
 package app.onlysearch
 
 import app.onlysearch.imports.bindNovaWidgets
+import app.onlysearch.search.Soulver
 import app.onlysearch.widgets.Widgets
 import app.onlysearch.widgets.cells
 import android.content.Intent

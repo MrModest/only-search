@@ -1,4 +1,4 @@
-package app.onlysearch
+package app.onlysearch.search
 
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4

@@ -74,7 +74,7 @@ private func overrideProcessPath(inside dir: String) -> Bool {
     return Bundle.main.bundleURL.path == dir
 }
 
-@_cdecl("Java_app_onlysearch_Soulver_nativeInit")
+@_cdecl("Java_app_onlysearch_search_Soulver_nativeInit")
 public func nativeInit(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ path: jstring?, _ locale: jstring?) -> jboolean {
     let url = URL(fileURLWithPath: swiftString(env, path))
     guard overrideProcessPath(inside: url.deletingLastPathComponent().path) else { return 0 }
@@ -84,20 +84,20 @@ public func nativeInit(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ p
     return 1
 }
 
-@_cdecl("Java_app_onlysearch_Soulver_nativeRateLog")
+@_cdecl("Java_app_onlysearch_search_Soulver_nativeRateLog")
 public func nativeRateLog(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?) -> jstring? {
     javaString(env, rates.log.joined(separator: "\n"))
 }
 
 /** "metric", "imperial" or "customaryUS". */
-@_cdecl("Java_app_onlysearch_Soulver_nativeSetUnitSystem")
+@_cdecl("Java_app_onlysearch_search_Soulver_nativeSetUnitSystem")
 public func nativeSetUnitSystem(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ system: jstring?) {
     unitSystem = UnitMeasurementSystem(rawValue: swiftString(env, system)) ?? .metric
     rebuild()
 }
 
 /** "USD=1;EUR=0.92;BTC=0.0000094;…": units of each currency per 1 USD. */
-@_cdecl("Java_app_onlysearch_Soulver_nativeSetRates")
+@_cdecl("Java_app_onlysearch_search_Soulver_nativeSetRates")
 public func nativeSetRates(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ data: jstring?) {
     var parsed: [String: Decimal] = [:]
     for pair in swiftString(env, data).split(separator: ";") {
@@ -108,7 +108,7 @@ public func nativeSetRates(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?,
     rebuild()
 }
 
-@_cdecl("Java_app_onlysearch_Soulver_nativeEval")
+@_cdecl("Java_app_onlysearch_search_Soulver_nativeEval")
 public func nativeEval(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ expression: jstring?) -> jstring? {
     guard let calculator else { return nil }
     let text = swiftString(env, expression)

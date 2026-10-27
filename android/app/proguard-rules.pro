@@ -2,7 +2,7 @@
 # classes, methods or fields by name (no FindClass/GetMethodID/GetFieldID), so nothing else is needed for it.
 
 # Used only by androidTest (SoulverTest), which runs against this minified release build.
--keepclassmembers class app.onlysearch.Soulver {
+-keepclassmembers class app.onlysearch.search.Soulver {
     long getInitMillis();
     boolean initBlocking(android.content.Context);
     java.lang.String evalBlocking(java.lang.String);

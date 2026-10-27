@@ -1,6 +1,7 @@
-package app.onlysearch
+package app.onlysearch.search
 
 import android.content.Context
+import app.onlysearch.prefs
 import android.system.Os
 import java.io.File
 import java.util.Locale

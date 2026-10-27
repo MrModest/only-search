@@ -32,7 +32,7 @@ import app.onlysearch.PillLine
 import app.onlysearch.PopupBg
 import app.onlysearch.Sans
 import app.onlysearch.Sheet
-import app.onlysearch.Soulver
+import app.onlysearch.search.Soulver
 import app.onlysearch.backupJson
 import app.onlysearch.drawer.GroupEditor
 import app.onlysearch.home.AppIcon

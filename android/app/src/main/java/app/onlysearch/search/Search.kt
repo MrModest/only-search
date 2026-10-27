@@ -24,7 +24,6 @@ import app.onlysearch.Muted
 import app.onlysearch.Sans
 import app.onlysearch.Sheet
 import app.onlysearch.Shortcut
-import app.onlysearch.Soulver
 import app.onlysearch.home.AppGrid
 import app.onlysearch.home.AppIcon
 import app.onlysearch.home.AppPopup
