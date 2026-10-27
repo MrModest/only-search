@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -25,6 +26,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import android.icu.util.Calendar
+import android.icu.util.ULocale
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -34,7 +37,6 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
-import java.util.Calendar
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -69,7 +71,14 @@ internal fun monthBars(events: List<Event>, start: LocalDate, weeks: Int, zone: 
 internal fun MonthCard(hidden: Set<Long>, modifier: Modifier) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val firstDay = remember { DayOfWeek.SUNDAY.plus(Calendar.getInstance().firstDayOfWeek - 1L) }
+    // ICU honours the regional preference (`-u-fw-mon`) and knows the locale's weekend; java.util.Calendar ignores fw.
+    val locales = LocalConfiguration.current.locales
+    val (firstDay, weekend) = remember(locales) {
+        val cal = Calendar.getInstance(ULocale.forLocale(locales[0]))
+        val w = cal.weekData
+        fun day(icu: Int) = DayOfWeek.SUNDAY.plus(icu - 1L)
+        day(cal.firstDayOfWeek) to (0..(w.weekendCease - w.weekendOnset + 7) % 7).map { day(w.weekendOnset).plus(it.toLong()) }.toSet()
+    }
     // Months away from the current one; back to the current month whenever home is left.
     var shift by remember { mutableIntStateOf(0) }
     DisposableEffect(lifecycle) {
@@ -126,10 +135,10 @@ internal fun MonthCard(hidden: Set<Long>, modifier: Modifier) {
             for (w in 0 until weeks) for (d in 0..6) {
                 val date = start.plusDays(w * 7L + d)
                 val out = date.month != month.month
-                val weekend = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
                 Box(
                     Modifier.offset(colW * d, rowH * w).size(colW, rowH)
-                        .background(if (date == today) Accent.copy(alpha = 0.4f) else if (out) Color.Black.copy(alpha = 0.28f) else if (weekend) Color.Black.copy(alpha = 0.16f) else Color.Transparent)
+                        .background(if (date.dayOfWeek in weekend) WallFg.copy(alpha = 0.15f) else Color.Transparent)
+                        .background(if (date == today) Accent.copy(alpha = 0.4f) else if (out) Color.Black.copy(alpha = 0.3f) else Color.Transparent)
                         .border(0.5.dp, line)
                         .clickable { openCalendar(context, date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()) }
                         .padding(horizontal = 4.dp, vertical = 2.dp),
