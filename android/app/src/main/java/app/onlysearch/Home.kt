@@ -430,8 +430,8 @@ internal fun WidgetPicker(apps: Apps, widgets: Widgets, only: String?, onClose: 
                                 if (!apps.addBuiltin(b.kind)) Toast.makeText(context, "No room for this widget on the page", Toast.LENGTH_SHORT).show()
                                 onClose()
                             }) {
-                            // The clock and next event draw light text for the wallpaper; a grey stand-in keeps them readable on a light sheet.
-                            val wall = isLight && (b.kind == "clock" || b.kind == "event")
+                            // The clock, next event and month draw light text for the wallpaper; a grey stand-in keeps them readable on a light sheet.
+                            val wall = isLight && b.kind in listOf("clock", "event", "month")
                             Box(if (wall) Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)).background(Color(0xFF77736C)) else Modifier) {
                                 BuiltinWidget(Cell("b:${b.kind}:preview", 0, 0, w, h), Modifier.fillMaxSize(), preview = true)
                             }

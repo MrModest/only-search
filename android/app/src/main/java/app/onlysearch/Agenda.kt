@@ -121,7 +121,7 @@ fun calendars(context: Context): List<CalendarInfo> {
 }
 
 /** Bumped when calendar access is granted or calendar data changes, so open agenda widgets reload. */
-private var calendarChanges by mutableIntStateOf(0)
+internal var calendarChanges by mutableIntStateOf(0)
 
 /** Today's events, refreshed once a minute; empty without permission. */
 @Composable
@@ -189,6 +189,7 @@ internal val Builtins = listOf(
     Builtin("event", "Next event", 2 * AppSpan, AppSpan) { prefs.columns to AppSpan },
     Builtin("today", "Today", 2 * AppSpan, 2 * AppSpan) { prefs.columns to 2 * AppSpan },
     Builtin("day", "Day", 2 * AppSpan, 3 * AppSpan) { prefs.columns to prefs.rows },
+    Builtin("month", "Month", 3 * AppSpan, 2 * AppSpan) { prefs.columns to 4 * AppSpan },
 )
 
 /** A built-in widget's content. Agenda widgets ask for calendar access in place and show only the calendars picked for them. */
@@ -224,6 +225,7 @@ internal fun BuiltinWidget(cell: Cell, modifier: Modifier = Modifier, preview: B
     when (kind.kind) {
         "event" -> NextEventLine(rememberEvents().filter { it.calendar !in hidden })
         "today" -> TodayCard(rememberEvents().filter { it.calendar !in hidden }, modifier)
+        "month" -> MonthCard(hidden, modifier)
         else -> DayCard(hidden, prefs.dayRange(cell.key), prefs.dayTrim(cell.key), modifier)
     }
 }
