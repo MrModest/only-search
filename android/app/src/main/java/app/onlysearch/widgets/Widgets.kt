@@ -1,5 +1,6 @@
-package app.onlysearch
+package app.onlysearch.widgets
 
+import app.onlysearch.WidgetCorner
 import android.app.Activity
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetHostView
@@ -21,6 +22,18 @@ import kotlin.math.abs
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.widget.RemoteViews
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import android.os.Bundle
+import android.util.SizeF
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.viewinterop.AndroidView
 
 /** Hosts third-party home-screen widgets. Bind/configure results arrive via [onResult]; bound ids go to [onBound]. */
 class Widgets(private val activity: Activity) {
@@ -130,4 +143,24 @@ private class CornerHostView(context: Context) : AppWidgetHostView(context) {
             is DrawableContainer -> d.current?.let(::fix)
         }
     }
+}
+
+@Composable
+internal fun WidgetView(widgets: Widgets, id: Int, width: Dp, height: Dp) {
+    val info = remember(id) { widgets.manager.getAppWidgetInfo(id) } ?: return
+    var view by remember { mutableStateOf<AppWidgetHostView?>(null) }
+    // Tell the widget how big it is, the way Launcher3 (and Nova) do: portrait as it is, plus landscape, wider and
+    // shorter. Widgets that size themselves by the max width then show as much as they would there.
+    LaunchedEffect(view, width, height) {
+        val v = view ?: return@LaunchedEffect
+        val dm = v.resources.displayMetrics
+        val ratio = maxOf(dm.heightPixels, dm.widthPixels) / minOf(dm.heightPixels, dm.widthPixels).toFloat()
+        val (w, h) = width.value to height.value
+        if (Build.VERSION.SDK_INT >= 31) v.updateAppWidgetSize(Bundle(), listOf(SizeF(w, h), SizeF(w * ratio, h / ratio)))
+        else @Suppress("DEPRECATION") v.updateAppWidgetSize(null, w.toInt(), (h / ratio).toInt(), (w * ratio).toInt(), h.toInt())
+    }
+    AndroidView(
+        factory = { ctx -> widgets.host.createView(ctx, id, info).apply { setAppWidget(id, info); setPadding(0, 0, 0, 0); view = this } },
+        modifier = Modifier.size(width, height).clip(RoundedCornerShape(WidgetCorner)),
+    )
 }

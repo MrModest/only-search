@@ -1,5 +1,10 @@
-package app.onlysearch
+package app.onlysearch.widgets
 
+import app.onlysearch.Accent
+import app.onlysearch.WallFg
+import app.onlysearch.WallMuted
+import app.onlysearch.line
+import app.onlysearch.shadowed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -71,7 +76,7 @@ internal fun monthBars(events: List<Event>, start: LocalDate, weeks: Int, zone: 
 internal fun MonthCard(hidden: Set<Long>, modifier: Modifier) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    // ICU honours the regional preference (`-u-fw-mon`) and knows the locale's weekend; java.util.Calendar ignores fw.
+    // ICU honours the regional preference (`-u-fw-mon`) and knows the locale's weekend.
     val locales = LocalConfiguration.current.locales
     val (firstDay, weekend) = remember(locales) {
         val cal = Calendar.getInstance(ULocale.forLocale(locales[0]))

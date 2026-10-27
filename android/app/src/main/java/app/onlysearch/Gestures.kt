@@ -1,5 +1,12 @@
 package app.onlysearch
 
+import app.onlysearch.home.AppIcon
+import app.onlysearch.settings.BackButton
+import app.onlysearch.settings.Group
+import app.onlysearch.settings.SettingsBg
+import app.onlysearch.settings.Stepper
+import app.onlysearch.settings.SwitchRow
+import app.onlysearch.settings.ValueRow
 import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
 import android.content.Context

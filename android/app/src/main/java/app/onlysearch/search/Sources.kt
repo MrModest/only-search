@@ -1,5 +1,7 @@
-package app.onlysearch
+package app.onlysearch.search
 
+import app.onlysearch.match
+import app.onlysearch.prefs
 import android.Manifest
 import android.app.Activity
 import android.content.Context

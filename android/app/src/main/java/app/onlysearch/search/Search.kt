@@ -1,7 +1,42 @@
 @file:OptIn(ExperimentalLayoutApi::class)
 
-package app.onlysearch
+package app.onlysearch.search
 
+import app.onlysearch.Accent
+import app.onlysearch.AccentCard
+import app.onlysearch.AccentLine
+import app.onlysearch.App
+import app.onlysearch.AppSpan
+import app.onlysearch.Apps
+import app.onlysearch.Card
+import app.onlysearch.CardLine
+import app.onlysearch.ChipLine
+import app.onlysearch.Dim
+import app.onlysearch.Divider
+import app.onlysearch.Expr
+import app.onlysearch.Fg
+import app.onlysearch.Field
+import app.onlysearch.FieldBg
+import app.onlysearch.Ic
+import app.onlysearch.Label
+import app.onlysearch.Mono
+import app.onlysearch.Muted
+import app.onlysearch.Sans
+import app.onlysearch.Sheet
+import app.onlysearch.Shortcut
+import app.onlysearch.Soulver
+import app.onlysearch.home.AppGrid
+import app.onlysearch.home.AppIcon
+import app.onlysearch.home.AppPopup
+import app.onlysearch.home.Dragged
+import app.onlysearch.home.LocalDragDrop
+import app.onlysearch.home.MicButton
+import app.onlysearch.home.rememberLaunchSource
+import app.onlysearch.home.tapHoldDrag
+import app.onlysearch.isLight
+import app.onlysearch.match
+import app.onlysearch.prefs
+import app.onlysearch.settings.SIc
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent

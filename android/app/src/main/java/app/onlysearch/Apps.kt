@@ -1,5 +1,8 @@
 package app.onlysearch
 
+import app.onlysearch.imports.IconPack
+import app.onlysearch.widgets.Builtins
+import app.onlysearch.widgets.cells
 import android.app.ActivityOptions
 import android.content.ComponentName
 import android.content.Context

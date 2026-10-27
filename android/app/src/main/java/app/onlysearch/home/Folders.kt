@@ -1,5 +1,17 @@
-package app.onlysearch
+package app.onlysearch.home
 
+import app.onlysearch.AppSpan
+import app.onlysearch.Apps
+import app.onlysearch.Fg
+import app.onlysearch.Field
+import app.onlysearch.PillLine
+import app.onlysearch.PopupBg
+import app.onlysearch.Sans
+import app.onlysearch.Tile
+import app.onlysearch.TileLine
+import app.onlysearch.WidgetCorner
+import app.onlysearch.prefs
+import app.onlysearch.shadowed
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

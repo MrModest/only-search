@@ -1,4 +1,4 @@
-package app.onlysearch
+package app.onlysearch.widgets
 
 import java.util.Calendar
 import java.util.TimeZone
@@ -8,7 +8,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class AgendaTest {
+class CalendarTest {
     private fun ev(begin: Long, end: Long, allDay: Boolean = false) = Event("e", begin, end, allDay, 1, 0)
     private fun utc(y: Int, m: Int, d: Int) = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { clear(); set(y, m, d) }.timeInMillis
 

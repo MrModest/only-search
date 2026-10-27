@@ -1,5 +1,13 @@
-package app.onlysearch
+package app.onlysearch.imports
 
+import app.onlysearch.AppSpan
+import app.onlysearch.Apps
+import app.onlysearch.Cell
+import app.onlysearch.Folder
+import app.onlysearch.MaxColumns
+import app.onlysearch.MaxRows
+import app.onlysearch.prefs
+import app.onlysearch.widgets.Widgets
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context

@@ -1,7 +1,23 @@
 @file:OptIn(ExperimentalFoundationApi::class)
 
-package app.onlysearch
+package app.onlysearch.drawer
 
+import app.onlysearch.Accent
+import app.onlysearch.Apps
+import app.onlysearch.ChipLine
+import app.onlysearch.Dim
+import app.onlysearch.Divider
+import app.onlysearch.Fg
+import app.onlysearch.Knob
+import app.onlysearch.Label
+import app.onlysearch.Mono
+import app.onlysearch.Muted
+import app.onlysearch.OnAccent
+import app.onlysearch.Pill
+import app.onlysearch.PopupBg
+import app.onlysearch.Scrim
+import app.onlysearch.home.AppTile
+import app.onlysearch.prefs
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

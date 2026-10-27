@@ -1,4 +1,4 @@
-package app.onlysearch
+package app.onlysearch.widgets
 
 import java.time.DayOfWeek
 import java.time.LocalDate

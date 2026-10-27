@@ -1,4 +1,4 @@
-package app.onlysearch
+package app.onlysearch.imports
 
 import android.content.ComponentName
 import android.content.Context

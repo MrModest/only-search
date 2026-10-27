@@ -1,5 +1,7 @@
-package app.onlysearch
+package app.onlysearch.home
 
+import app.onlysearch.Cell
+import app.onlysearch.prefs
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
