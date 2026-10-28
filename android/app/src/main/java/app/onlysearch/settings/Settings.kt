@@ -287,9 +287,9 @@ internal fun SwitchRow(title: String, subtitle: String?, checked: Boolean, monoS
 }
 
 @Composable
-internal fun ValueRow(title: String, value: String, valueColor: Color = Accent, icon: ImageVector? = null, onClick: () -> Unit) {
+internal fun ValueRow(title: String, value: String, valueColor: Color = Accent, icon: ImageVector? = null, onClick: (() -> Unit)?) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = if (icon != null) 56.dp else 50.dp).clickable(onClick = onClick).padding(horizontal = 12.dp),
+        Modifier.fillMaxWidth().heightIn(min = if (icon != null) 56.dp else 50.dp).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (icon != null) Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(GroupLine), contentAlignment = Alignment.Center) {
@@ -297,7 +297,7 @@ internal fun ValueRow(title: String, value: String, valueColor: Color = Accent, 
         }
         Text(title, fontSize = 15.sp, modifier = Modifier.weight(1f).padding(start = if (icon != null) 2.dp else 2.dp))
         Text(value, color = valueColor, fontSize = if (icon != null) 13.sp else 14.sp, maxLines = 1)
-        Icon(SIc.next, null, tint = Dim, modifier = Modifier.size(16.dp))
+        if (onClick != null) Icon(SIc.next, null, tint = Dim, modifier = Modifier.size(16.dp))
     }
 }
 
@@ -681,7 +681,7 @@ private fun AboutSettings() {
     val open = { url: String -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }; Unit }
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Group("Only Search", listOf(
-            { ValueRow("Version", versionName(context) ?: "", Muted) {} },
+            { ValueRow("Version", versionName(context) ?: "", Muted, onClick = null) },
             { ValueRow("Source code", "GitHub", Muted) { open("https://github.com/MrModest/only-search") } },
             { ValueRow("Licence", "GNU AGPLv3", Muted) { open("https://github.com/MrModest/only-search/blob/main/LICENSE") } },
         ))
