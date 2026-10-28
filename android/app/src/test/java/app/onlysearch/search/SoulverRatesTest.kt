@@ -1,6 +1,8 @@
 package app.onlysearch.search
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SoulverRatesTest {
@@ -13,5 +15,10 @@ class SoulverRatesTest {
     @Test fun noCacheKeepsFiatOnly() {
         assertEquals("USD=1;EUR=0.9", Soulver.withCachedCrypto("USD=1;EUR=0.9", null))
         assertEquals("USD=1;EUR=0.9", Soulver.withCachedCrypto("USD=1;EUR=0.9", "USD=1;EUR=0.8"))
+    }
+
+    @Test fun onlyFetchedCryptoCountsAsFresh() {
+        assertTrue(Soulver.hasCrypto("USD=1;BTC=0.00002"))
+        assertFalse(Soulver.hasCrypto("USD=1;EUR=0.9"))
     }
 }

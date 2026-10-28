@@ -8,6 +8,8 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.Executors
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import org.json.JSONObject
@@ -64,18 +66,25 @@ object Soulver {
      * so an offline start still uses recent rates; with none at all SoulverCore's built-in standard rates apply.
      */
     suspend fun refreshRates() {
-        val sp = prefs.sp
-        var data = sp.getString("rates", null)
-        if (data == null || System.currentTimeMillis() - sp.getLong("ratesAt", 0) > 6 * 3_600_000L) {
-            withContext(Dispatchers.IO) { runCatching { withCachedCrypto(fetchRates(), data) } }.getOrNull()?.let {
-                data = it
-                // Without any crypto rate the set isn't marked fresh, so the next refresh retries CoinGecko.
-                val fresh = it.split(";").any { e -> e.substringBefore("=") in Crypto.values }
-                sp.edit().putString("rates", it).putLong("ratesAt", if (fresh) System.currentTimeMillis() else 0L).apply()
+        // One refresh at a time: a second start while a slow fetch is out waits for it and then finds the set fresh.
+        val data = ratesLock.withLock {
+            val sp = prefs.sp
+            var data = sp.getString("rates", null)
+            if (data == null || System.currentTimeMillis() - sp.getLong("ratesAt", 0) > 6 * 3_600_000L) {
+                withContext(Dispatchers.IO) { runCatching { fetchRates() } }.getOrNull()?.let { fetched ->
+                    data = withCachedCrypto(fetched, data)
+                    // Only freshly fetched crypto marks the set fresh; with carried-over or no crypto the next refresh retries CoinGecko.
+                    sp.edit().putString("rates", data).putLong("ratesAt", if (hasCrypto(fetched)) System.currentTimeMillis() else 0L).apply()
+                }
             }
+            data
         }
         data?.let { setRates(it) }
     }
+
+    private val ratesLock = Mutex()
+
+    internal fun hasCrypto(rates: String) = rates.split(";").any { it.substringBefore("=") in Crypto.values }
 
     private val Crypto = mapOf(
         "bitcoin" to "BTC", "ethereum" to "ETH", "solana" to "SOL", "ripple" to "XRP", "dogecoin" to "DOGE",
