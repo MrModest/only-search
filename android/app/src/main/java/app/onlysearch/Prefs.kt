@@ -196,8 +196,10 @@ internal fun parseBackup(json: String): Map<String, Any> {
     require(root.optString("app") == "only-search") { "Not an Only Search backup" }
     val data = root.getJSONObject("prefs")
     val entries = data.keys().asSequence().associateWith { data.getJSONObject(it) }
-    val values = entries.mapValues { (_, e) ->
-        when (e.getString("t")) {
+    val values = entries.mapValues { (k, e) ->
+        val t = e.getString("t")
+        backupType(k)?.let { require(it == t) { "Wrong type for $k" } }
+        when (t) {
             "s" -> e.getString("v")
             "i" -> e.getInt("v")
             "l" -> e.getLong("v")
@@ -206,8 +208,27 @@ internal fun parseBackup(json: String): Map<String, Any> {
             else -> throw IllegalArgumentException("Unknown value type")
         }
     }
+    backupRanges.forEach { (k, r) -> (values[k] as? Int)?.let { require(it in r) { "$k out of range" } } }
     (values["pages"] as? String)?.let(::parsePages)
     (values["folders"] as? String)?.let(::parseFolders)
     (values["groups"] as? String)?.let(::parseGroups)
     return values
+}
+
+/** Ranges Settings allows for the numbers the launcher uses unclamped (columns and rows are clamped on load). */
+private val backupRanges = mapOf("set.iconSize" to 70..130, "set.keepQueryMinutes" to 1..120, "set.dockSize" to 3..6, "set.dim" to 0..60, "set.drawerColumns" to 3..6)
+private val backupInts = backupRanges.keys + setOf("set.columns", "set.rows", "set.appSpan", "defaultPage")
+private val backupBools = ("labels lockLayout nextEvent todayCard calcMath calcUnits calcCurrency calcDates calcFinance calcNatural computeTime anyDecimal " +
+    "srcContacts srcSettings srcWeb boostFrequent fuzzy typeToSearch resetQuery showDock mic black themedIcons suggested scrubber").split(" ").map { "set.$it" } +
+    listOf("seeded", "builtins")
+private val backupStrings = "iconShape homeCurrency unitSystem enterCopies engine searchBar theme accent iconPack".split(" ").map { "set.$it" } +
+    listOf("pages", "folders", "groups", "dock", "history", "recent", "hidden", "home", "widgets", "novaWidgets")
+
+/** The type tag the launcher reads [key] as, or null for keys it doesn't know (kept as they are). */
+private fun backupType(key: String) = when {
+    key in backupInts || key.startsWith("count:") -> "i"
+    key == "lastBackup" || key.startsWith("last:") -> "l"
+    key in backupBools || key.startsWith("asked.") -> "b"
+    key in backupStrings || listOf("set.g", "label:", "cals:", "range:", "trim:").any(key::startsWith) -> "s"
+    else -> null
 }

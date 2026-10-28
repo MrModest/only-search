@@ -46,6 +46,20 @@ class BackupTest {
         assertFalse(out.isEmpty())
     }
 
+    @Test fun rejectsKnownKeysOutOfRangeOrOfTheWrongType() {
+        assertThrows(IllegalArgumentException::class.java) { parseBackup(wrap("""{"set.drawerColumns":{"t":"i","v":0}}""")) }
+        assertThrows(IllegalArgumentException::class.java) { parseBackup(wrap("""{"set.iconSize":{"t":"i","v":500}}""")) }
+        assertThrows(IllegalArgumentException::class.java) { parseBackup(wrap("""{"set.columns":{"t":"s","v":"8"}}""")) }
+        assertThrows(IllegalArgumentException::class.java) { parseBackup(wrap("""{"set.labels":{"t":"i","v":1}}""")) }
+        assertThrows(IllegalArgumentException::class.java) { parseBackup(wrap("""{"pages":{"t":"i","v":1}}""")) }
+    }
+
+    @Test fun validSettingsPass() {
+        val all = mapOf("set.drawerColumns" to 5, "set.iconSize" to 90, "set.columns" to 8, "set.labels" to false, "set.theme" to "dark",
+            "set.gDown" to "search", "last:a" to 5L, "count:a" to 3, "asked.x" to true)
+        assertEquals(all, parseBackup(backupJson(all)))
+    }
+
     private fun wrap(prefs: String) = """{"app":"only-search","version":1,"prefs":$prefs}"""
 }
 
