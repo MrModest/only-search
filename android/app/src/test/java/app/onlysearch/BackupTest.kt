@@ -10,13 +10,23 @@ class BackupTest {
     private val pagesJson = """[{"items":[{"k":"a","x":0,"y":1,"w":1,"h":2}]},{"items":[]}]"""
 
     @Test fun roundTripKeepsEveryType() {
-        val all = mapOf("s" to "text\nwith\"quotes", "i" to 7, "l" to (1L shl 40), "b" to true, "f" to 1.5f, "pages" to pagesJson)
+        val all = mapOf("history" to "text\twith\"quotes", "count:a" to 7, "last:a" to (1L shl 40), "set.labels" to true, "pages" to pagesJson,
+            "folders" to """{"f:1":{"name":"F","apps":["a"]}}""", "groups" to """[{"name":"G","apps":["a"]}]""", "defaultPage" to 1, "set.appSpan" to 2,
+            "dock" to "a\nb", "label:a" to "A", "cals:w:1" to "1,2", "range:w:1" to "4,20", "trim:w:1" to "0,6", "set.gDown" to "search",
+            "asked.p" to true, "lastBackup" to 5L, "seeded" to true, "set.theme" to "dark")
         assertEquals(all, parseBackup(backupJson(all)))
     }
 
-    @Test fun skipsRatesAndUnknownTypes() {
-        val out = parseBackup(backupJson(mapOf("rates" to "x", "ratesAt" to 1L, "set" to setOf("a"), "keep" to 1)))
-        assertEquals(mapOf("keep" to 1), out)
+    @Test fun skipsDeviceOnlyUnknownKeysAndTypes() {
+        val device = mapOf("rates" to "x", "ratesAt" to 1L, "pendingWidget" to 3, "widgetSpot" to "0,0,0,2,2", "novaWidgets" to "[]")
+        val out = parseBackup(backupJson(device + mapOf("set" to setOf("a"), "f" to 1.5f, "keep" to 1, "dock" to "a")))
+        assertEquals(mapOf("dock" to "a"), out)
+    }
+
+    @Test fun dropsDeviceOnlyAndUnknownKeysEvenWhenMalformed() {
+        assertEquals(emptyMap<String, Any>(), parseBackup(wrap("""{"pendingWidget":{"t":"s","v":"oops"}}""")))
+        assertEquals(emptyMap<String, Any>(), parseBackup(wrap("""{"novaWidgets":{"t":"s","v":"oops"}}""")))
+        assertEquals(emptyMap<String, Any>(), parseBackup(wrap("""{"widgetSpot":{"t":"i","v":1},"rates":{"t":"x"},"whatever":{"t":"s","v":"x"}}""")))
     }
 
     @Test fun backupIsTaggedAndEmptyRestores() {
@@ -33,8 +43,8 @@ class BackupTest {
     }
 
     @Test fun rejectsUnknownValueTypeAndBadPayloads() {
-        assertThrows(IllegalArgumentException::class.java) { parseBackup(wrap("""{"k":{"t":"x","v":1}}""")) }
-        assertThrows(Exception::class.java) { parseBackup(wrap("""{"k":{"t":"i"}}""")) }
+        assertThrows(IllegalArgumentException::class.java) { parseBackup(wrap("""{"count:a":{"t":"x","v":1}}""")) }
+        assertThrows(Exception::class.java) { parseBackup(wrap("""{"count:a":{"t":"i"}}""")) }
         assertThrows(Exception::class.java) { parseBackup(wrap("""{"pages":{"t":"s","v":"[{\"items\":[{\"k\":\"a\"}]}]"}}""")) }
         assertThrows(Exception::class.java) { parseBackup(wrap("""{"groups":{"t":"s","v":"oops"}}""")) }
     }
