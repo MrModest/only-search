@@ -106,7 +106,7 @@ GitHub Actions (`.github/workflows/build.yml`) runs the same commands on every p
 
 ## Credits
 
-**[SoulverCore](https://github.com/soulverteam/SoulverCore)** by Soulver ([soulver.app](https://soulver.app)) powers all calculations: sums, units, currencies, dates and time zones. Only Search uses the prebuilt Android libraries from [SoulverCore-Multiplatform](https://github.com/soulverteam/SoulverCore-Multiplatform).
+Calculations powered by **[SoulverCore](https://github.com/soulverteam/SoulverCore)** ([soulver.app](https://soulver.app)): sums, units, currencies, dates and time zones. Only Search uses the prebuilt Android libraries from [SoulverCore-Multiplatform](https://github.com/soulverteam/SoulverCore-Multiplatform).
 
 Also used:
 

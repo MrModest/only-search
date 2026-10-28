@@ -199,6 +199,10 @@ private fun Hub(apps: Apps, pages: List<Page>, onClose: () -> Unit, onOpen: (Str
             shown.groupBy { it.group }.forEach { (group, list) ->
                 Group(group, list.map { p -> { NavRow(p) { onOpen(p.id) } } })
             }
+            if (q.isEmpty()) Text("Calculations powered by SoulverCore\nsoulver.app", color = Muted, fontSize = 13.sp, lineHeight = 19.sp, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable {
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/soulverteam/SoulverCore")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                }.padding(12.dp))
         }
     }
 }
