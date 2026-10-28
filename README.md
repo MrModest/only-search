@@ -52,7 +52,7 @@ Left to right, top to bottom: home screen, search, a unit conversion, a time zon
   - Maths and percentages: `(128*3.5)/4 + 12^2`, `20% of 340`, `$48 + 15% tip`
   - Units: `65 kg in pounds`, or just `5 ft` and it shows metres. Bare units convert to your home unit system (Settings, Search & calculator, Defaults).
   - Currencies and crypto (live rates): `12 USD` shows your home currency, `12 USD in GBP`
-  - Time zones: `12:00 Berlin in Moscow`, `msk time`, `time in Tokyo`
+  - Time zones: `12:00 Berlin in Moscow`, `msk time`, `time in Tokyo`, or just `14:00 Moscow` for your local time
   - 12 or 24 hour time: `1 pm` shows 13:00 when your phone uses a 24 hour locale
   - Dates and durations: `today + 1`, `tomorrow + 3 days`, `today + 3 weeks`, `12:00 + 1h 35m`
   - Decimals: `12.5` and `12,5` both mean 12.5 (a setting, on by default, under Defaults)

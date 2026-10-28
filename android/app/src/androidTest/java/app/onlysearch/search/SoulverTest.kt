@@ -6,7 +6,11 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.TimeZone
 
 /** Runs the documented SoulverCore examples through the real JNI bridge and logs results + timings. Expects en-DE formatting (decimal comma, 24 h clock, € suffix), pinned in [examples]. */
 @RunWith(AndroidJUnit4::class)
@@ -58,6 +62,37 @@ class SoulverTest {
         repeat(n) { Soulver.evalBlocking(cases[it % cases.size].first) }
         Log.i(TAG, "warm average %.3f ms over $n evals".format((System.nanoTime() - t0) / 1e6 / n))
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    @Test
+    fun homeTimeZone() {
+        val saved = TimeZone.getDefault()
+        try {
+            Locale.setDefault(Locale("en", "DE"))
+            TimeZone.setDefault(TimeZone.getTimeZone("Europe/Berlin"))
+            assertTrue("init failed", Soulver.initBlocking(InstrumentationRegistry.getInstrumentation().targetContext))
+            fun at(zone: String, hour: Int) = ZonedDateTime.now(ZoneId.of(zone)).withHour(hour).withMinute(0).withZoneSameInstant(ZoneId.of("Europe/Berlin"))
+                .format(DateTimeFormatter.ofPattern("HH:mm"))
+            val minutes = ZoneId.of("Europe/Berlin").rules.getOffset(java.time.Instant.now()).totalSeconds / 60
+            val target = " in UTC+%d:%02d:00".format(minutes / 60, minutes % 60)
+            // Queries as Search builds them: homeQuery appends the home-zone target to a bare "<time> <place>".
+            val failures = mutableListOf<String>()
+            fun check(q: String, ok: (String) -> Boolean) = Soulver.evalBlocking(q).let { if (!ok(it)) failures += "$q => '$it'" }
+            check("14:00 Moscow"+target) { it == at("Europe/Moscow", 14) }
+            check("14:00 Moscow time"+target) { it == at("Europe/Moscow", 14) }
+            check("2pm London"+target) { it == at("Europe/London", 14) }
+            check("14:00 Berlin"+target) { it == "14:00" }
+            check("12:00 Berlin in Moscow") { it == ZonedDateTime.now(ZoneId.of("Europe/Berlin")).withHour(12).withMinute(0).withZoneSameInstant(ZoneId.of("Europe/Moscow")).format(DateTimeFormatter.ofPattern("HH:mm")) }
+            check("msk time") { Regex("""\d\d:\d\d""").matches(it) }
+            check("13:00") { it == "13:00" }
+            check("1 pm") { it == "13:00" }
+            check("12:00 + 1h 35m") { it == "13:35" }
+            check("12 USD in EUR") { it.contains("€") }
+            check("5 ft in m") { it.contains("1,52 m") }
+            assertTrue(failures.joinToString("\n"), failures.isEmpty())
+        } finally {
+            TimeZone.setDefault(saved)
+        }
     }
 
     companion object { const val TAG = "SoulverTest" }

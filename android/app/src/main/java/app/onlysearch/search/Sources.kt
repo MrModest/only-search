@@ -182,12 +182,20 @@ private val Aliases = mapOf("kph" to "km/h", "miles" to "mi", "mile" to "mi", "f
     "lbs" to "lb", "ounce" to "oz", "ounces" to "oz", "stone" to "st", "stones" to "st", "liter" to "l", "liters" to "l", "litre" to "l", "litres" to "l",
     "gallon" to "gal", "gallons" to "gal", "°c" to "c", "celsius" to "c", "°f" to "f", "fahrenheit" to "f")
 
+// A clock time followed by a place or zone name: "14:00 Moscow", "2pm London", "9:30 PST", "14:00 Moscow time".
+private val PlaceTimeRx = Regex("""^(\d{1,2}:\d\d\s*([ap]m)?|\d{1,2}\s*[ap]m)\s+(?!(\p{L}+day|tomorrow|now|am|pm)\b)\p{L}[\p{L} .'-]*$""", RegexOption.IGNORE_CASE)
+
 /**
- * [q] converted to the home currency or unit system ("12 USD" → "12 USD in EUR", "5 ft" → "5 ft in m" when metric),
- * or null when it names its own target or has nothing to convert. Units follow the first one in the query.
+ * [q] converted to the home currency, unit system or time zone ("12 USD" → "12 USD in EUR", "5 ft" → "5 ft in m" when metric,
+ * "14:00 Moscow" → "14:00 Moscow in UTC+2:00:00"), or null when it names its own target or has nothing to convert.
+ * Units follow the first one in the query. Zone names and IANA ids are unreliable targets in SoulverCore, so the zone is given as a UTC offset.
  */
-fun homeQuery(q: String, currency: String, system: String): String? {
+fun homeQuery(q: String, currency: String, system: String, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String? {
     if (TargetRx.containsMatchIn(q)) return null
+    if (PlaceTimeRx.matches(q)) {
+        val minutes = zone.rules.getOffset(java.time.Instant.now()).totalSeconds / 60
+        return "$q in UTC%s%d:%02d:00".format(if (minutes < 0) "-" else "+", Math.abs(minutes) / 60, Math.abs(minutes) % 60)
+    }
     if (CurrencyRx.containsMatchIn(q)) return "$q in $currency"
     // "4h 10m" is a duration, not metres.
     if (DateRx.containsMatchIn(q.replace(Regex("""\d\s*m\b"""), ""))) return null

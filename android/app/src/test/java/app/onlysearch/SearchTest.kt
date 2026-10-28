@@ -63,6 +63,18 @@ class SearchTest {
         assertEquals("2 kg in lb", homeQuery("2 kg", "USD", "customaryUS"))
     }
 
+    @Test fun timesAtAPlaceConvertToTheHomeZone() {
+        val tokyo = java.time.ZoneId.of("Asia/Tokyo")
+        assertEquals("14:00 Moscow in UTC+9:00:00", homeQuery("14:00 Moscow", "EUR", "metric", tokyo))
+        assertEquals("2pm London in UTC+9:00:00", homeQuery("2pm London", "EUR", "metric", tokyo))
+        assertEquals("9:30 PST in UTC+9:00:00", homeQuery("9:30 PST", "EUR", "metric", tokyo))
+        assertEquals("14:00 Moscow time in UTC+9:00:00", homeQuery("14:00 Moscow time", "EUR", "metric", tokyo))
+        assertEquals("1:00 PM New York in UTC+9:00:00", homeQuery("1:00 PM New York", "EUR", "metric", tokyo))
+        assertEquals("14:00 Moscow in UTC+5:30:00", homeQuery("14:00 Moscow", "EUR", "metric", java.time.ZoneId.of("Asia/Kolkata")))
+        listOf("12:00 Berlin in Moscow", "msk time", "Moscow time", "13:00", "1 pm", "3:45pm", "2pm tomorrow", "12:00 + 1h 35m", "today + 3 weeks", "10:30 Monday")
+            .forEach { assertNull(it, homeQuery(it, "EUR", "metric", tokyo)) }
+    }
+
     @Test fun explicitTargetsHomeUnitsAndOtherMathAreLeftAlone() {
         assertNull(homeQuery("12 USD in GBP", "EUR", "metric"))
         assertNull(homeQuery("5 ft to cm", "EUR", "metric"))
