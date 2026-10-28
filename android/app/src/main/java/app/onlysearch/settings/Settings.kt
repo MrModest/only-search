@@ -116,6 +116,7 @@ internal object SIc {
     val gestures = line("M9 11V5a2 2 0 0 1 4 0v6 M13 10a2 2 0 0 1 4 0v4a7 7 0 0 1-7 7 6 6 0 0 1-5-3l-2-4a2 2 0 0 1 3.4-2L9 15")
     val look = line("M12 21a9 9 0 1 1 9-9c0 2-1.5 3-3 3h-2a2 2 0 0 0-1.5 3.3A2 2 0 0 1 12 21z M7.5 11h.01 M11 7h.01 M16 8.5h.01")
     val backup = line("M4 14v6h16v-6 M12 3v12 M7 10l5 5 5-5")
+    val about = line("M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 11v6 M12 7.5h.01")
 }
 
 /** One settings page: its hub row, the words it can be found by, and its content. */
@@ -127,7 +128,8 @@ internal class Page(
 @Composable
 fun SettingsScreen(apps: Apps, start: String, onClose: () -> Unit) {
     var page by remember { mutableStateOf(start) }
-    val pages = remember { settingsPages(apps) }
+    val context = LocalContext.current
+    val pages = remember { settingsPages(apps, context) }
     // Opened straight on a page (e.g. Layout in edit mode): Back goes back to where it came from, not to the hub.
     val back = { if (page == "hub" || page == start) onClose() else page = "hub" }
     BackHandler(onBack = back)
@@ -136,7 +138,7 @@ fun SettingsScreen(apps: Apps, start: String, onClose: () -> Unit) {
     else Hub(apps, pages, onClose) { page = it }
 }
 
-private fun settingsPages(apps: Apps): List<Page> = listOf(
+private fun settingsPages(apps: Apps, context: Context): List<Page> = listOf(
     Page("search", "Search", SIc.calc, true, "Search & calculator", { "Math, units, currency, time zones" },
         "calculator math units currency rates dates time zones finance natural language compute time home currency unit system metric imperial decimal point comma dot") { CalcSettings() },
     Page("sources", "Search", SIc.sources, true, "Sources & ranking",
@@ -159,7 +161,11 @@ private fun settingsPages(apps: Apps): List<Page> = listOf(
     Page("backup", "System", SIc.backup, false, "Backup & restore",
         { "Last backup: " + prefs.sp.getLong("lastBackup", 0L).let { if (it == 0L) "never" else ago(it) } },
         "backup restore export import json file nova launcher") { BackupSettings(apps) },
+    Page("about", "System", SIc.about, false, "About", { "Version ${versionName(context)} · licence · credits" },
+        "about version licence license agpl source code github credits soulver soulvercore libraries open source") { AboutSettings() },
 )
+
+private fun versionName(context: Context): String? = context.packageManager.getPackageInfo(context.packageName, 0).versionName
 
 private fun isDefaultHome(context: Context): Boolean =
     if (Build.VERSION.SDK_INT >= 29) context.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)
@@ -170,7 +176,7 @@ private fun isDefaultHome(context: Context): Boolean =
 private fun Hub(apps: Apps, pages: List<Page>, onClose: () -> Unit, onOpen: (String) -> Unit) {
     val context = LocalContext.current
     var filter by remember { mutableStateOf("") }
-    val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
+    val version = remember { versionName(context) }
     val isDefault = remember { isDefaultHome(context) }
     Column(Modifier.fillMaxSize().background(SettingsBg).imePadding().verticalScroll(rememberScrollState()).systemBarsPadding()
         .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp)) {
@@ -199,10 +205,6 @@ private fun Hub(apps: Apps, pages: List<Page>, onClose: () -> Unit, onOpen: (Str
             shown.groupBy { it.group }.forEach { (group, list) ->
                 Group(group, list.map { p -> { NavRow(p) { onOpen(p.id) } } })
             }
-            if (q.isEmpty()) Text("Calculations powered by SoulverCore\nsoulver.app", color = Muted, fontSize = 13.sp, lineHeight = 19.sp, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable {
-                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/soulverteam/SoulverCore")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                }.padding(12.dp))
         }
     }
 }
@@ -661,6 +663,36 @@ private fun AccentPicker(onClose: () -> Unit) {
 /** A fresh start after a restore, so no saved screen state (like the shown page) outlives the old layout. */
 private fun restart(context: Context) {
     context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+}
+
+private val credits = listOf(
+    Triple("Kotlin", "Apache-2.0", "https://github.com/JetBrains/kotlin"),
+    Triple("AndroidX and Jetpack Compose", "Apache-2.0", "https://github.com/androidx/androidx"),
+    Triple("Swift toolchain and Android SDK", "Apache-2.0 with RLE", "https://github.com/swiftlang/swift"),
+    Triple("Android NDK", "Apache-2.0 with LLVM exception", "https://github.com/android/ndk"),
+    Triple("JetBrains Mono", "SIL OFL 1.1", "https://github.com/JetBrains/JetBrainsMono"),
+    Triple("JUnit 4 and AndroidX Test (tests)", "EPL-1.0 and Apache-2.0", "https://github.com/junit-team/junit4"),
+    Triple("org.json (tests)", "Public domain", "https://github.com/stleary/JSON-java"),
+)
+
+@Composable
+private fun AboutSettings() {
+    val context = LocalContext.current
+    val open = { url: String -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }; Unit }
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Group("Only Search", listOf(
+            { ValueRow("Version", versionName(context) ?: "", Muted) {} },
+            { ValueRow("Source code", "GitHub", Muted) { open("https://github.com/MrModest/only-search") } },
+            { ValueRow("Licence", "GNU AGPLv3", Muted) { open("https://github.com/MrModest/only-search/blob/main/LICENSE") } },
+        ))
+        val soulver = listOf<@Composable () -> Unit>(
+            { ValueRow("SoulverCore", "GitHub", Muted) { open("https://github.com/soulverteam/SoulverCore") } },
+            { ValueRow("soulver.app", "", Muted) { open("https://soulver.app") } },
+        )
+        Group("Credits", soulver + credits.map { (name, licence, url) -> @Composable { ValueRow(name, licence, Muted) { open(url) } } })
+        Text("Calculations powered by SoulverCore (soulver.app): sums, units, currencies, dates and time zones.", color = Muted, fontSize = 13.sp, lineHeight = 19.sp,
+            modifier = Modifier.padding(horizontal = 4.dp))
+    }
 }
 
 @Composable
