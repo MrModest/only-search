@@ -3,6 +3,7 @@ package app.onlysearch.search
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -83,7 +84,10 @@ class SoulverTest {
             check("2pm London"+target) { it == at("Europe/London", 14) }
             check("14:00 Berlin"+target) { it == "14:00" }
             check("12:00 Berlin in Moscow") { it == ZonedDateTime.now(ZoneId.of("Europe/Berlin")).withHour(12).withMinute(0).withZoneSameInstant(ZoneId.of("Europe/Moscow")).format(DateTimeFormatter.ofPattern("HH:mm")) }
-            check("msk time") { Regex("""\d\d:\d\d""").matches(it) }
+            assertTrue(mskOk("29. October 2026 at 00:01", "00:01"))
+            assertFalse(mskOk("29. October 2026 at 00:05", "00:01"))
+            // Soulver prefixes the date when Moscow's day differs from the device zone's day.
+            check("msk time") { r -> (0..1).any { mskOk(r, ZonedDateTime.now(ZoneId.of("Europe/Moscow")).minusMinutes(it.toLong()).format(DateTimeFormatter.ofPattern("HH:mm"))) } }
             check("13:00") { it == "13:00" }
             check("1 pm") { it == "13:00" }
             check("12:00 + 1h 35m") { it == "13:35" }
@@ -94,6 +98,8 @@ class SoulverTest {
             TimeZone.setDefault(saved)
         }
     }
+
+    private fun mskOk(result: String, hhmm: String) = Regex("""(.+ at )?$hhmm""").matches(result)
 
     companion object { const val TAG = "SoulverTest" }
 }
