@@ -1,6 +1,8 @@
 package app.onlysearch.widgets
 
 import app.onlysearch.WidgetCorner
+import app.onlysearch.prefs
+import androidx.core.content.edit
 import android.app.Activity
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetHostView
@@ -42,8 +44,10 @@ class Widgets(private val activity: Activity) {
     }
     val manager: AppWidgetManager = AppWidgetManager.getInstance(activity)
     var onBound: (Int) -> Unit = {}
-    /** The id waiting on its bind/configure result; kept across a recreate by MainActivity. */
-    var pending = -1
+    /** The id waiting on its bind/configure result; saved, as the launcher may be killed while the other app is open. */
+    var pending: Int
+        get() = prefs.sp.getInt("pendingWidget", -1)
+        set(v) { prefs.sp.edit { if (v == -1) remove("pendingWidget") else putInt("pendingWidget", v) } }
     /** Widgets waiting to be added one after another (a Nova import); each runs its setup just before it's added. */
     private val queue = ArrayDeque<Pair<AppWidgetProviderInfo, () -> Unit>>()
 

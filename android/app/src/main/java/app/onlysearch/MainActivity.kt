@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
     private val stopTick = mutableIntStateOf(0)
     private val resumeTick = mutableIntStateOf(0)
     private val typed = androidx.compose.runtime.mutableStateOf(0 to "")
+    private var awaitingWidget = false
 
     private val packageCallback = object : LauncherApps.Callback() {
         private fun reload(vararg pkgs: String) { lifecycleScope.launch { apps.load(pkgs.toSet()) } }
@@ -60,10 +61,7 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this, "No room for this widget on the page", Toast.LENGTH_SHORT).show()
             }
         }
-        savedInstanceState?.let { st ->
-            widgets.pending = st.getInt("pendingWidget", -1)
-            st.getIntArray("widgetSpot")?.let { apps.widgetSpot = it[0] to Cell("", it[1], it[2], it[3], it[4]) }
-        }
+        awaitingWidget = widgets.pending != -1
         apps.pruneWidgets { widgets.manager.getAppWidgetInfo(it) != null }
         // Ids no page uses any more (a restore or Nova import replaced the layout) are released.
         val used = apps.pages.flatMap { p -> p.items.mapNotNull { it.widgetId } }.toSet()
@@ -116,12 +114,6 @@ class MainActivity : ComponentActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putInt("pendingWidget", widgets.pending)
-        apps.widgetSpot?.let { (p, c) -> outState.putIntArray("widgetSpot", intArrayOf(p, c.x, c.y, c.w, c.h)) }
-    }
-
     override fun onDestroy() {
         getSystemService(LauncherApps::class.java).unregisterCallback(packageCallback)
         super.onDestroy()
@@ -130,6 +122,20 @@ class MainActivity : ComponentActivity() {
     @Deprecated("Widget bind/configure flows still report through onActivityResult")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
+        widgetResult(requestCode, resultCode)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Back on top with no result for an add from before the process died (e.g. force-stopped): it's dropped.
+        if (hasFocus && awaitingWidget) { awaitingWidget = false; widgetResult(Widgets.REQ_CONFIGURE, RESULT_CANCELED) }
+    }
+
+    private fun widgetResult(requestCode: Int, resultCode: Int) {
+        // Relaunched after the process died while the widget's setup was open, we get a cancel first and the real result later.
+        if (awaitingWidget && resultCode != RESULT_OK) return
+        awaitingWidget = false
+        if (resultCode != RESULT_OK) apps.widgetSpot = null
         widgets.onResult(requestCode, resultCode)
     }
 }

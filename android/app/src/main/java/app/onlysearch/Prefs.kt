@@ -174,7 +174,7 @@ internal fun backupJson(all: Map<String, *>): String {
     val out = org.json.JSONObject().put("app", "only-search").put("version", 1)
     val data = org.json.JSONObject()
     all.forEach { (k, v) ->
-        if (k == "rates" || k == "ratesAt") return@forEach
+        if (k in setOf("rates", "ratesAt", "pendingWidget", "widgetSpot")) return@forEach
         val t = when (v) { is String -> "s"; is Int -> "i"; is Long -> "l"; is Boolean -> "b"; is Float -> "f"; else -> return@forEach }
         data.put(k, org.json.JSONObject().put("t", t).put("v", v))
     }

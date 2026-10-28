@@ -215,8 +215,10 @@ class Apps(private val context: Context) {
         }
     }
 
-    /** Where the next bound widget goes, if it was dropped on a spot. */
-    var widgetSpot: Pair<Int, Cell>? = null
+    /** Where the next bound widget goes, if it was dropped on a spot; saved like [app.onlysearch.widgets.Widgets.pending]. */
+    var widgetSpot: Pair<Int, Cell>?
+        get() = sp.getString("widgetSpot", null)?.split(",")?.map(String::toInt)?.let { it[0] to Cell("", it[1], it[2], it[3], it[4]) }
+        set(v) { sp.edit { if (v == null) remove("widgetSpot") else v.let { (p, c) -> putString("widgetSpot", "$p,${c.x},${c.y},${c.w},${c.h}") } } }
 
     /** Puts a newly bound widget of w×h app cells on the page; false if there's no room for it. */
     fun addWidget(id: Int, w: Int, h: Int): Boolean {
