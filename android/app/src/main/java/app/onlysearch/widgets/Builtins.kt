@@ -51,15 +51,20 @@ internal fun BuiltinWidget(cell: Cell, modifier: Modifier = Modifier, preview: B
     if (!kind.agenda) return Clock(modifier.fillMaxSize())
     val context = LocalContext.current
     val granted = calendarChanges >= 0 && hasCalendar(context)
-    DisposableEffect(granted) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    // Watched only while started; the widgets reload on every start anyway.
+    DisposableEffect(lifecycle, granted) {
         if (!granted) return@DisposableEffect onDispose {}
-        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) { override fun onChange(selfChange: Boolean) { calendarChanges++ } }
-        context.contentResolver.registerContentObserver(CalendarContract.CONTENT_URI, true, observer)
-        onDispose { context.contentResolver.unregisterContentObserver(observer) }
+        val changes = object : ContentObserver(Handler(Looper.getMainLooper())) { override fun onChange(selfChange: Boolean) { calendarChanges++ } }
+        val observer = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_START) context.contentResolver.registerContentObserver(CalendarContract.CONTENT_URI, true, changes)
+            if (e == Lifecycle.Event.ON_STOP) context.contentResolver.unregisterContentObserver(changes)
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer); context.contentResolver.unregisterContentObserver(changes) }
     }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { if (it) calendarChanges++ }
     // Access can change outside our prompts (system settings, another app's grant): re-check whenever we come back.
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle, granted) {
         val observer = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_START && hasCalendar(context) != granted) calendarChanges++ }
         lifecycle.addObserver(observer)

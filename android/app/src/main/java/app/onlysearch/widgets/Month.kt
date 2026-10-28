@@ -92,8 +92,8 @@ internal fun MonthCard(hidden: Set<Long>, modifier: Modifier) {
         onDispose { lifecycle.removeObserver(observer) }
     }
     val (today, month, all) = produceState(Triple(LocalDate.now(), LocalDate.now(), emptyList<Event>()), calendarChanges, shift) {
-        var loaded: LocalDate? = null
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            var loaded: LocalDate? = null
             while (true) {
                 val now = LocalDate.now()
                 if (now != loaded) {

@@ -16,13 +16,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import java.util.Date
 
 @Composable
 internal fun Clock(modifier: Modifier = Modifier) = BoxWithConstraints(modifier) {
     val context = LocalContext.current
-    val now by produceState(Date()) { while (true) { value = Date(); delay(60_000 - System.currentTimeMillis() % 60_000) } }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val now by produceState(Date()) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { while (true) { value = Date(); delay(60_000 - System.currentTimeMillis() % 60_000) } }
+    }
     // 92sp when there's room, smaller in a short or narrow cell block.
     val size = with(LocalDensity.current) { minOf(92.dp, (maxHeight - 30.dp).coerceAtLeast(16.dp), maxWidth / 2.8f).toSp() }
     Column(Modifier.padding(horizontal = 8.dp).align(Alignment.CenterStart), verticalArrangement = Arrangement.spacedBy(6.dp)) {
