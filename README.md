@@ -18,6 +18,9 @@ Only Search is a home screen app for Android (a "launcher") built around one sea
   <img src="docs/screenshots/edit-home.png" width="160" alt="Edit home pages, dark">
   <img src="docs/screenshots/settings.png" width="160" alt="Settings, dark">
 </p>
+<p>
+  <img src="docs/screenshots/about.png" width="160" alt="About screen, dark">
+</p>
 
 **Light**
 
@@ -35,8 +38,11 @@ Only Search is a home screen app for Android (a "launcher") built around one sea
   <img src="docs/screenshots/edit-home-light.png" width="160" alt="Edit home pages, light">
   <img src="docs/screenshots/settings-light.png" width="160" alt="Settings, light">
 </p>
+<p>
+  <img src="docs/screenshots/about-light.png" width="160" alt="About screen, light">
+</p>
 
-Left to right, top to bottom: home screen, search, a unit conversion, a time zone conversion, a date calculation, the app drawer, an app's menu, a currency conversion, editing home pages, settings.
+Left to right, top to bottom: home screen, search, a unit conversion, a time zone conversion, a date calculation, the app drawer, an app's menu, a currency conversion, editing home pages, settings, about.
 
 ## What it can do
 
@@ -107,13 +113,6 @@ GitHub Actions (`.github/workflows/build.yml`) runs the same commands on every p
 ## Credits
 
 Calculations powered by **[SoulverCore](https://github.com/soulverteam/SoulverCore)** ([soulver.app](https://soulver.app)): sums, units, currencies, dates and time zones. Only Search uses the prebuilt Android libraries from [SoulverCore-Multiplatform](https://github.com/soulverteam/SoulverCore-Multiplatform).
-
-<p>
-  <img src="docs/screenshots/about.png" width="160" alt="About screen crediting SoulverCore, dark">
-  <img src="docs/screenshots/about-light.png" width="160" alt="About screen crediting SoulverCore, light">
-</p>
-
-The in-app About screen credits SoulverCore.
 
 Also used:
 
