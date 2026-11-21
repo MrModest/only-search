@@ -111,6 +111,8 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.tap
     onPress(false)
     if (outcome == 1) { onTap?.invoke(); return }
     if (outcome == 2) return
+    // Popup focus can move the tile as the IME closes; measure finger movement on screen.
+    val heldAt = coords()?.takeIf { it.isAttached }?.localToScreen((currentEvent.changes.firstOrNull { it.id == down.id } ?: down).position)
     onLongPress()
     var dragging = false
     while (true) {
@@ -119,7 +121,7 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.tap
         if (!c.pressed) break
         if (onDragStart == null) continue
         val window = coords()?.takeIf { it.isAttached }?.let { it.localToScreen(c.position) - homeOnScreen } ?: continue
-        if (!dragging && (c.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+        if (!dragging && heldAt != null && (window + homeOnScreen - heldAt).getDistance() > viewConfiguration.touchSlop) {
             dragging = true
             onDragStart(down.position, window)
         }
