@@ -165,7 +165,7 @@ internal fun AppTile(apps: Apps, app: App, labelColor: Color?, size: Dp, modifie
             drag?.startsWith("folder:") == true -> { { apps.takeFromFolder(drag.removePrefix("folder:"), app.key) } }
             else -> null
         }
-        if (menu) AppPopup(apps, app, anchor(), hint = canDrag && drag != "drawer", onRemove = remove) { menu = false }
+        if (menu) AppPopup(apps, app, anchor(), hint = canDrag && drag != "drawer" && drag != "search", onRemove = remove) { menu = false }
     }
 }
 
