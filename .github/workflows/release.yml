@@ -35,6 +35,7 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       ref: ${{ needs.prepare.outputs.tag }}
+    secrets: inherit
   publish:
     needs: [prepare, build]
     runs-on: ubuntu-24.04
