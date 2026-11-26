@@ -17,7 +17,7 @@ command -v op >/dev/null || { echo "op (1Password CLI) not installed" >&2; exit 
 [ -d "$JAVA_HOME" ] || { echo "JAVA_HOME not found: $JAVA_HOME" >&2; exit 1; }
 
 n=$(tr -d '[:space:]' < "$root/version.txt")
-echo "Version: 0.2.$n"
+echo "Version: $n"
 
 tmp=$(mktemp -d)
 chmod 700 "$tmp"
@@ -35,7 +35,7 @@ certs=$("$apksigner" verify --print-certs "$apk") # set -e: a failed verify abor
 signer=$(grep -i 'certificate SHA-256 digest:' <<<"$certs" | head -1 | sed 's/.*digest: *//' | tr 'A-F' 'a-f')
 [ "$signer" = "$cert" ] || { echo "APK signer cert does not match pinned release cert $cert" >&2; exit 1; }
 
-out=~/Downloads/only-search-0.2.$n-arm64.apk
+out=~/Downloads/only-search-$n-arm64.apk
 cp "$apk" "$out"
 echo "$out"
 

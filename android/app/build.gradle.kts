@@ -12,9 +12,14 @@ android {
         applicationId = "app.onlysearch"
         minSdk = 28 // SoulverCore's Android build targets API 28
         targetSdk = 35
-        val version = rootProject.file("../version.txt").readText().trim().toInt()
-        versionCode = version
-        versionName = "0.2.$version"
+        val version = rootProject.file("../version.txt").readText().trim()
+        require(Regex("[0-9]+\\.[0-9]+\\.[0-9]+").matches(version))
+        val (major, minor, patch) = version.split(".").map { it.toLong() }
+        require(minor < 1000 && patch < 1000)
+        val code = major * 1_000_000 + minor * 1_000 + patch
+        require(code in 1..2_100_000_000)
+        versionCode = code.toInt()
+        versionName = version
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
