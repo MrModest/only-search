@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.layout.LayoutCoordinates
 import kotlinx.coroutines.withTimeoutOrNull
@@ -111,17 +112,18 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.tap
     onPress(false)
     if (outcome == 1) { onTap?.invoke(); return }
     if (outcome == 2) return
-    // Popup focus can move the tile as the IME closes; measure finger movement on screen.
-    val heldAt = coords()?.takeIf { it.isAttached }?.localToScreen((currentEvent.changes.firstOrNull { it.id == down.id } ?: down).position)
+    // Both event positions share a coordinate frame, even while popup focus moves the IME layout.
+    var movement = Offset.Zero
     onLongPress()
     var dragging = false
     while (true) {
         val c = awaitPointerEvent(pass).changes.firstOrNull { it.id == down.id } ?: break
+        movement += c.positionChange()
         c.consume()
         if (!c.pressed) break
         if (onDragStart == null) continue
         val window = coords()?.takeIf { it.isAttached }?.let { it.localToScreen(c.position) - homeOnScreen } ?: continue
-        if (!dragging && heldAt != null && (window + homeOnScreen - heldAt).getDistance() > viewConfiguration.touchSlop) {
+        if (!dragging && movement.getDistance() > viewConfiguration.touchSlop) {
             dragging = true
             onDragStart(down.position, window)
         }
