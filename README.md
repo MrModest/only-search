@@ -87,7 +87,7 @@ Left to right, top to bottom: home screen, search, a unit conversion, a time zon
 You need Android 9 or newer, on a modern phone (64-bit ARM, which is nearly every phone made in the last several years).
 
 1. On your phone, open the [Releases page](https://github.com/MrModest/only-search/releases).
-2. Under the newest release, download the file ending in `.apk`, named like `only-search-0.2.N-arm64.apk`.
+2. Under the newest release, download the file ending in `.apk`, named like `only-search-<semver>-arm64.apk`.
 3. Open the downloaded file. If Android says installing from this source is blocked, tap Settings, allow it for your browser or file manager, then go back and tap Install.
 4. When it finishes, press the Home button. Android asks which home app to use: choose Only Search, then Always.
 

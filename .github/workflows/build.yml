@@ -2,17 +2,33 @@ name: build
 
 on:
   push:
+  pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+    secrets:
+      RELEASE_KEYSTORE_B64:
+        required: true
+      RELEASE_KEYSTORE_PASSWORD:
+        required: true
+
+permissions:
+  contents: read
 
 jobs:
   apk:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Tag must match version.txt
         if: startsWith(github.ref, 'refs/tags/v')
-        run: test "$GITHUB_REF_NAME" = "v0.2.$(tr -d '[:space:]' < version.txt)"
+        run: test "$GITHUB_REF_NAME" = "v$(tr -d '[:space:]' < version.txt)"
 
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }

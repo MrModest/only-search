@@ -6,7 +6,7 @@
 cd android && ./gradlew assembleRelease     # builds the Swift bridge too
 ```
 CI (`.github/workflows/build.yml`) runs the same two commands; it is a convenience, not a requirement.
-`./local-build.sh [--install] [N]` wraps the Gradle command with release signing (key from 1Password).
+`./local-build.sh [--install]` wraps the Gradle command with release signing (key from 1Password).
 
 `setup.sh` installs Swift into `~/.local/swift-<version>` (the macOS .pkg is unpacked there, so Xcode's own Swift is never used), the Swift SDK with `swift sdk install` (macOS: `~/Library/org.swift.swiftpm/swift-sdks`, Linux: `~/.swiftpm/swift-sdks`), and the NDK with `sdkmanager` into `$ANDROID_HOME/ndk/`. Pinned versions live in `bridge/env.sh`.
 
@@ -36,8 +36,10 @@ CI emulators: Android 14 (required) and Android 17 / 37.2 with 16 KB pages (best
 Releases are signed with a permanent PKCS12 key, alias `onlysearch`, certificate SHA-256 `a67aee0e…3cf3`.
 - Stored as GitHub secrets `RELEASE_KEYSTORE_B64` and `RELEASE_KEYSTORE_PASSWORD`.
 - Local backup: `~/.config/only-search/release.p12` + `release.password`. **Losing it means users must uninstall to update.**
-- Version lives in `version.txt` (one integer N): versionCode = N, versionName `0.2.N`. CI and `local-build.sh` both read it.
-- Release: `echo $((N+1)) > version.txt`, commit, `git tag v0.2.<N+1>`, push the commit and tag. The build workflow fails on a `v*` tag that doesn't match `version.txt`.
+- Version lives in `version.txt` as semver, initially 0.2.109. versionName equals it; versionCode is major*1,000,000 + minor*1,000 + patch (minor and patch must stay below 1000).
+- Squash merges with fix titles publish patch releases; feat titles publish minor releases. Other subjects publish nothing. The release workflow owns version commits and tags, builds via the reusable build workflow, and publishes a signed arm64 APK as a prerelease.
+- Use the release workflow's manual dispatch with patch or minor when needed. Never edit versions or create tags/releases manually.
+- If building or publishing fails after the atomic version commit/tag push, rerun the failed workflow: it resumes the same tag without another bump. Publishing skips an existing release and replaces its asset safely.
 - Builds before v0.2.32 used per-run debug keys, so each of those needed an uninstall.
 
 ## Motion (Nova-inspired, v0.2.0)

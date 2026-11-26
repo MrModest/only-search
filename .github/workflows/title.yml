@@ -1,0 +1,14 @@
+name: PR title
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+permissions:
+  contents: read
+jobs:
+  title:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: python3 .github/scripts/subject.py check "$TITLE"
