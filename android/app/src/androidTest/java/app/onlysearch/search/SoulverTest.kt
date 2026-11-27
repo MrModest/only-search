@@ -71,7 +71,7 @@ class SoulverTest {
         Locale.setDefault(Locale.forLanguageTag(InstrumentationRegistry.getArguments().getString("locale", "en-DE")))
         assertTrue("init failed", Soulver.initBlocking(InstrumentationRegistry.getInstrumentation().targetContext))
         // Fixed rates deliberately leave many decimals before currency rounding.
-        Soulver.setRatesBlocking("USD=1;EUR=0.911313;JPY=153.456789;KWD=0.307654321;BHD=0.376543219;BTC=0.0000167297")
+        Soulver.setRatesBlocking("USD=1;EUR=0.911313;JPY=153.456789;KWD=0.307654321;BHD=0.376543219;CNY=7.243567;NOK=10.654321;SEK=11.234567;CAD=1.365432;BTC=0.0000167297")
         try {
             listOf(
                 homeQuery("1 usd", "EUR", "metric")!! to "0,91 €",
@@ -82,6 +82,12 @@ class SoulverTest {
                 "1 USD in KWD" to "0,308 KWD",
                 "1 kwd" to "1,000 KWD",
                 "1 usd in bhd" to "0,377 BHD",
+                "1 usd in cny" to "7,24 CNY",
+                "1 usd in nok" to "10,65 NOK",
+                "1 usd in sek" to "11,23 SEK",
+                "1 usd in cad" to "C$1,37",
+                "1 kg in lb" to "2,2 lb",
+                "3pm + 2 hours" to "17:00",
                 "5 btc" to "5 btc",
                 "5,123456789 btc" to "5,12345679 btc",
                 "5 bitcoin" to "5 bitcoin",

@@ -139,7 +139,7 @@ public func nativeEval(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ e
                 // Android's currency formatter ignores dp below 1 when roundResults is false.
                 var rounded = Decimal()
                 NSDecimalRound(&rounded, &value, formatting.dp, .plain)
-                result = calculator.calculate("\(NSDecimalString(&rounded, calculator.customization.locale)) \(unit.symbol)")
+                result = calculator.calculate("\(NSDecimalString(&rounded, calculator.customization.locale)) \(code)")
             }
         } else if let value = result.evaluationResult.decimalValue, abs(value) <= 1 {
             formatting.dp = 8
