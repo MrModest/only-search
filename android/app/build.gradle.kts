@@ -45,7 +45,7 @@ android {
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
-    testBuildType = "release"
+    testBuildType = providers.gradleProperty("testBuildType").getOrElse("release")
 
     splits {
         abi {

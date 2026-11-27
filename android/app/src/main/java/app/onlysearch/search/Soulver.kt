@@ -4,6 +4,7 @@ import android.content.Context
 import app.onlysearch.prefs
 import android.system.Os
 import java.io.File
+import java.util.Currency
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.Executors
@@ -23,7 +24,7 @@ object Soulver {
     @Volatile var initMillis = 0L
         private set
 
-    private external fun nativeInit(resourcesPath: String, locale: String): Boolean
+    private external fun nativeInit(resourcesPath: String, locale: String, currencyDigits: String): Boolean
     private external fun nativeEval(expression: String): String?
     private external fun nativeSetUnitSystem(system: String)
     private external fun nativeSetRates(rates: String)
@@ -43,7 +44,9 @@ object Soulver {
         val dir = copyResources(context)
         Os.setenv("TZ", TimeZone.getDefault().id, true)
         System.loadLibrary("SoulverBridge")
-        ready = nativeInit(dir.absolutePath, Locale.getDefault().toLanguageTag().replace('-', '_'))
+        val currencyDigits = Currency.getAvailableCurrencies().filter { it.defaultFractionDigits >= 0 }
+            .joinToString(";") { "${it.currencyCode}=${it.defaultFractionDigits}" }
+        ready = nativeInit(dir.absolutePath, Locale.getDefault().toLanguageTag().replace('-', '_'), currencyDigits)
         // The first evaluation loads unit, currency and date tables; pay that here rather than on the first keystroke.
         if (ready) listOf("1 kg in lb", "\$10 + 15%", "3pm + 2 hours", "today + 1 week").forEach { nativeEval(it) }
         initMillis = (System.nanoTime() - start) / 1_000_000

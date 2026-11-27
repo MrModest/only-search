@@ -1,12 +1,12 @@
 import Android
 import CJNI
-import CoreFoundation
 import Foundation
 import SoulverCore
 
 // Kotlin calls in from a single background thread (Soulver.kt), so no locking.
 nonisolated(unsafe) private var calculator: Calculator?
 nonisolated(unsafe) private var base: EngineCustomization?
+nonisolated(unsafe) private var currencyDigits: [String: Int] = [:]
 nonisolated(unsafe) private var unitSystem = UnitMeasurementSystem.metric
 
 /** Live rates fetched by the app (units of each currency per 1 USD). Unknown codes return nil. */
@@ -77,11 +77,17 @@ private func overrideProcessPath(inside dir: String) -> Bool {
 }
 
 @_cdecl("Java_app_onlysearch_search_Soulver_nativeInit")
-public func nativeInit(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ path: jstring?, _ locale: jstring?) -> jboolean {
+public func nativeInit(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ path: jstring?, _ locale: jstring?, _ digits: jstring?) -> jboolean {
+    currencyDigits = Dictionary(uniqueKeysWithValues: swiftString(env, digits).split(separator: ";").compactMap { pair in
+        let parts = pair.split(separator: "=", maxSplits: 1)
+        guard parts.count == 2, let digits = Int(parts[1]) else { return nil }
+        return (String(parts[0]), digits)
+    })
     let url = URL(fileURLWithPath: swiftString(env, path))
     guard overrideProcessPath(inside: url.deletingLastPathComponent().path) else { return 0 }
-    guard let bundle = ResourceBundle(url: url) else { return 0 }
-    base = EngineCustomization(resourcesBundle: bundle, locale: Locale(identifier: swiftString(env, locale)))
+    guard ResourceBundle(url: url) != nil else { return 0 }
+    // Load standard currency symbols too; the resource-only initializer misses currencies such as JPY/KWD.
+    base = EngineCustomization.standardWith(locale: Locale(identifier: swiftString(env, locale)))
     rebuild()
     return 1
 }
@@ -123,16 +129,18 @@ public func nativeEval(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ e
            let code = unit.identifier.currencyCode {
             // Crypto custom units inherit USD's identifier, but retain their own symbol.
             let isCrypto = crypto.values.contains { $0.contains(unit.symbol) }
-            // Android NumberFormatter's fraction-digit getter always returns 2; query ICU through CoreFoundation.
-            var minorUnits: Int32 = 2
-            let currencyCode = CFStringCreateWithCString(nil, code, CFStringBuiltInEncodings.UTF8.rawValue)
-            CFNumberFormatterGetDecimalInfoForCurrencyCode(currencyCode, &minorUnits, nil)
-            formatting.dp = isCrypto ? 8 : Int(minorUnits)
+            formatting.dp = isCrypto ? 8 : currencyDigits[code.uppercased(), default: 2]
             formatting.currencyFormattingPreferences.roundResults = false
             formatting.currencyFormattingPreferences.showTrailingZeros = !isCrypto
             calculator.formattingPreferences = formatting
             // Currency rounding also changes evaluationResult, so recalculate at the chosen precision.
             result = calculator.calculate(text)
+            if !isCrypto, var value = result.evaluationResult.unitExpressionValue?.value {
+                // Android's currency formatter ignores dp below 1 when roundResults is false.
+                var rounded = Decimal()
+                NSDecimalRound(&rounded, &value, formatting.dp, .plain)
+                result = calculator.calculate("\(NSDecimalString(&rounded, calculator.customization.locale)) \(unit.symbol)")
+            }
         } else if let value = result.evaluationResult.decimalValue, abs(value) <= 1 {
             formatting.dp = 8
             calculator.formattingPreferences = formatting

@@ -68,15 +68,19 @@ class SoulverTest {
 
     @Test
     fun numberFormatting() {
-        Locale.setDefault(Locale("en", "DE"))
+        Locale.setDefault(Locale.forLanguageTag(InstrumentationRegistry.getArguments().getString("locale", "en-DE")))
         assertTrue("init failed", Soulver.initBlocking(InstrumentationRegistry.getInstrumentation().targetContext))
         // Fixed rates deliberately leave many decimals before currency rounding.
         Soulver.setRatesBlocking("USD=1;EUR=0.911313;JPY=153.456789;KWD=0.307654321;BHD=0.376543219;BTC=0.0000167297")
         try {
             listOf(
+                homeQuery("1 usd", "EUR", "metric")!! to "0,91 €",
                 "1 usd in eur" to "0,91 €",
                 "1 usd in jpy" to "¥153",
+                "1 USD in JPY" to "¥153",
                 "1 usd in kwd" to "0,308 KWD",
+                "1 USD in KWD" to "0,308 KWD",
+                "1 kwd" to "1,000 KWD",
                 "1 usd in bhd" to "0,377 BHD",
                 "5 btc" to "5 btc",
                 "5,123456789 btc" to "5,12345679 btc",
@@ -98,7 +102,9 @@ class SoulverTest {
                 "-0,0001" to "-0,0001",
                 "0" to "0",
             ).forEach { (expr, expected) ->
-                assertEquals(expr, expected, Soulver.evalBlocking(expr))
+                val actual = Soulver.evalBlocking(expr)
+                Log.i(TAG, "formatting: $expr => $actual")
+                assertEquals(expr, expected, actual)
             }
         } finally {
             Soulver.setRatesBlocking("")
