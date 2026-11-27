@@ -46,6 +46,9 @@ private func rebuild() {
     let calc = Calculator(customization: c)
     var formatting = FormattingPreferences()
     formatting.dp = 2
+    formatting.notationPreferences = NotationPreferences(notationStyle: .auto, upperNotationThreshold: .trillion)
+    // Preserve small currency values until we choose their display precision.
+    formatting.currencyFormattingPreferences.roundResults = false
     calc.formattingPreferences = formatting
     calculator = calc
 }
@@ -114,5 +117,12 @@ public func nativeEval(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ e
     let text = swiftString(env, expression)
     if text.split(whereSeparator: { !$0.isLetter }).contains(where: { unpriced.contains($0.lowercased()) }) { return javaString(env, "") }
     let result = calculator.calculate(text)
+    if let value = result.evaluationResult.decimalValue, value != 0, abs(value) < 1,
+       var formatting = calculator.formattingPreferences {
+        formatting.dp = 8
+        let formatted = EvaluationResultFormatter(customization: calculator.customization, formattingPreferences: formatting)
+            .format(result: result.evaluationResult)
+        return javaString(env, formatted.stringValue)
+    }
     return javaString(env, result.isEmptyResult || result.isFailedResult || result.isPendingResult ? "" : result.stringValue)
 }

@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -52,7 +53,7 @@ class SoulverTest {
         Soulver.evalBlocking("0,5 BTC in USD").let { if (it.isNotBlank()) failures += "no BTC rate yet: 0,5 BTC in USD => '$it' (want blank)" }
         // Our rate provider: fixed rates in, conversions out (live ones are fetched by the app, not here).
         Soulver.setRatesBlocking("USD=1;EUR=0.5;BTC=0.00001;ETH=0.0004")
-        listOf("100 USD in EUR" to "50", "0,5 BTC in USD" to "50.000", "1 ETH in EUR" to "1.250", "1000 USD in BTC" to "0,01", "0,5 btc in usd" to "50.000", "2 bitcoin in usd" to "200K").forEach { (expr, expect) ->
+        listOf("100 USD in EUR" to "50", "0,5 BTC in USD" to "50.000", "1 ETH in EUR" to "1.250", "1000 USD in BTC" to "0,01", "0,5 btc in usd" to "50.000", "2 bitcoin in usd" to "200.000").forEach { (expr, expect) ->
             val r = Soulver.evalBlocking(expr)
             Log.i(TAG, "provider: %-30s => %s".format(expr, r))
             if (!r.contains(expect)) failures += "provider: $expr => '$r' (want $expect)"
@@ -63,6 +64,32 @@ class SoulverTest {
         repeat(n) { Soulver.evalBlocking(cases[it % cases.size].first) }
         Log.i(TAG, "warm average %.3f ms over $n evals".format((System.nanoTime() - t0) / 1e6 / n))
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    @Test
+    fun numberFormatting() {
+        Locale.setDefault(Locale("en", "DE"))
+        assertTrue("init failed", Soulver.initBlocking(InstrumentationRegistry.getInstrumentation().targetContext))
+        Soulver.setRatesBlocking("USD=1;EUR=0.92;BTC=0.00001690639")
+        try {
+            listOf(
+                "5 btc in eur" to "272.086,47 €",
+                "0,001 btc in eur" to "54,42 €",
+                "1234567" to "1.234.567",
+                "1e15" to "1P",
+                "1e30" to "1e30",
+                "50 eur in btc" to "0,00091883 btc",
+                "1 usd in btc" to "0,00001691 btc",
+                "0,1 + 0,2" to "0,3",
+                "1/3" to "0,33333333",
+                "-0,0001" to "-0,0001",
+                "0" to "0",
+            ).forEach { (expr, expected) ->
+                assertEquals(expr, expected, Soulver.evalBlocking(expr))
+            }
+        } finally {
+            Soulver.setRatesBlocking("")
+        }
     }
 
     @Test
