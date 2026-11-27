@@ -70,19 +70,28 @@ class SoulverTest {
     fun numberFormatting() {
         Locale.setDefault(Locale("en", "DE"))
         assertTrue("init failed", Soulver.initBlocking(InstrumentationRegistry.getInstrumentation().targetContext))
-        // Unrounded: 5 BTC = 228086.4175 EUR; 0.001 BTC = 45.6172835 EUR.
-        Soulver.setRatesBlocking("USD=1;EUR=0.91234567;BTC=0.00002")
+        // Fixed rates deliberately leave many decimals before currency rounding.
+        Soulver.setRatesBlocking("USD=1;EUR=0.911313;JPY=153.456789;KWD=0.307654321;BHD=0.376543219;BTC=0.0000167297")
         try {
             listOf(
-                "5 btc in eur" to "228.086,42 €",
-                "0,001 btc in eur" to "45,62 €",
+                "1 usd in eur" to "0,91 €",
+                "1 usd in jpy" to "¥153",
+                "1 usd in kwd" to "0,308 KWD",
+                "1 usd in bhd" to "0,377 BHD",
+                "5 btc" to "5 btc",
+                "5,123456789 btc" to "5,12345679 btc",
+                "5 bitcoin" to "5 bitcoin",
+                "5 btc in eur" to "272.363,82 €",
+                "0,001 btc in eur" to "54,47 €",
                 "1234567" to "1.234.567",
                 "1e15" to "1P",
                 "1e30" to "1e30",
-                "50 eur in btc" to "0,00109608 btc",
-                "1 usd in btc" to "0,00002 btc",
-                "0,001 btc in eur" to "45,62 €", // Small-result formatting must not leak to the next query.
-                "0,999999 eur" to "0,999999 €",
+                "50 eur in btc" to "0,00091789 btc",
+                "1 usd in btc" to "0,00001673 btc",
+                "0,001 btc in eur" to "54,47 €", // Crypto precision must not leak to the next query.
+                "0,999999 eur" to "1,00 €",
+                "0,004 eur" to "0,00 €",
+                "1,234567 kwd" to "1,235 KWD",
                 "1,234567 eur" to "1,23 €",
                 "0,1 + 0,2" to "0,3",
                 "1/3" to "0,33333333",

@@ -1,5 +1,6 @@
 import Android
 import CJNI
+import CoreFoundation
 import Foundation
 import SoulverCore
 
@@ -114,18 +115,29 @@ public func nativeEval(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ e
     guard let calculator else { return nil }
     let text = swiftString(env, expression)
     if text.split(whereSeparator: { !$0.isLetter }).contains(where: { unpriced.contains($0.lowercased()) }) { return javaString(env, "") }
-    let result = calculator.calculate(text)
-    if let value = result.evaluationResult.decimalValue, abs(value) <= 1,
-       var formatting = calculator.formattingPreferences {
+    var result = calculator.calculate(text)
+    if var formatting = calculator.formattingPreferences {
         let normalFormatting = calculator.formattingPreferences
         defer { calculator.formattingPreferences = normalFormatting }
-        formatting.dp = 8
-        formatting.currencyFormattingPreferences.roundResults = false
-        calculator.formattingPreferences = formatting
-        // Recalculate to recover small currencies already rounded to zero (or up to one).
-        let precise = calculator.calculate(text)
-        if let value = precise.evaluationResult.decimalValue, abs(value) < 1 {
-            return javaString(env, precise.stringValue)
+        if let unit = result.evaluationResult.unitExpressionValue?.unit,
+           let code = unit.identifier.currencyCode {
+            // Crypto custom units inherit USD's identifier, but retain their own symbol.
+            let isCrypto = crypto.values.contains { $0.contains(unit.symbol) }
+            // Android NumberFormatter's fraction-digit getter always returns 2; query ICU through CoreFoundation.
+            var minorUnits: Int32 = 2
+            let currencyCode = CFStringCreateWithCString(nil, code, CFStringBuiltInEncodings.UTF8.rawValue)
+            CFNumberFormatterGetDecimalInfoForCurrencyCode(currencyCode, &minorUnits, nil)
+            formatting.dp = isCrypto ? 8 : Int(minorUnits)
+            formatting.currencyFormattingPreferences.roundResults = false
+            formatting.currencyFormattingPreferences.showTrailingZeros = !isCrypto
+            calculator.formattingPreferences = formatting
+            // Currency rounding also changes evaluationResult, so recalculate at the chosen precision.
+            result = calculator.calculate(text)
+        } else if let value = result.evaluationResult.decimalValue, abs(value) <= 1 {
+            formatting.dp = 8
+            calculator.formattingPreferences = formatting
+            let precise = calculator.calculate(text)
+            if let value = precise.evaluationResult.decimalValue, abs(value) < 1 { result = precise }
         }
     }
     return javaString(env, result.isEmptyResult || result.isFailedResult || result.isPendingResult ? "" : result.stringValue)
