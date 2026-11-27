@@ -47,8 +47,6 @@ private func rebuild() {
     var formatting = FormattingPreferences()
     formatting.dp = 2
     formatting.notationPreferences = NotationPreferences(notationStyle: .auto, upperNotationThreshold: .trillion)
-    // Preserve small currency values until we choose their display precision.
-    formatting.currencyFormattingPreferences.roundResults = false
     calc.formattingPreferences = formatting
     calculator = calc
 }
@@ -117,12 +115,18 @@ public func nativeEval(_ env: UnsafeMutablePointer<JNIEnv?>, _ cls: jclass?, _ e
     let text = swiftString(env, expression)
     if text.split(whereSeparator: { !$0.isLetter }).contains(where: { unpriced.contains($0.lowercased()) }) { return javaString(env, "") }
     let result = calculator.calculate(text)
-    if let value = result.evaluationResult.decimalValue, value != 0, abs(value) < 1,
+    if let value = result.evaluationResult.decimalValue, abs(value) <= 1,
        var formatting = calculator.formattingPreferences {
+        let normalFormatting = calculator.formattingPreferences
+        defer { calculator.formattingPreferences = normalFormatting }
         formatting.dp = 8
-        let formatted = EvaluationResultFormatter(customization: calculator.customization, formattingPreferences: formatting)
-            .format(result: result.evaluationResult)
-        return javaString(env, formatted.stringValue)
+        formatting.currencyFormattingPreferences.roundResults = false
+        calculator.formattingPreferences = formatting
+        // Recalculate to recover small currencies already rounded to zero (or up to one).
+        let precise = calculator.calculate(text)
+        if let value = precise.evaluationResult.decimalValue, abs(value) < 1 {
+            return javaString(env, precise.stringValue)
+        }
     }
     return javaString(env, result.isEmptyResult || result.isFailedResult || result.isPendingResult ? "" : result.stringValue)
 }
