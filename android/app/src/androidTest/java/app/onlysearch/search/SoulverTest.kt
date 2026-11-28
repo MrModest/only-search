@@ -74,7 +74,7 @@ class SoulverTest {
         Soulver.setRatesBlocking("USD=1;EUR=0.911313;JPY=153.456789;KWD=0.307654321;BHD=0.376543219;CNY=7.243567;NOK=10.654321;SEK=11.234567;CAD=1.365432;BTC=0.0000167297")
         try {
             listOf(
-                homeQuery("1 usd", "EUR", "metric")!! to "0,91 €",
+                homeQuery("1 usd", "EUR", "metric", ZoneId.systemDefault())!! to "0,91 €",
                 "1 usd in eur" to "0,91 €",
                 "1 usd in jpy" to "¥153",
                 "1 USD in JPY" to "¥153",
