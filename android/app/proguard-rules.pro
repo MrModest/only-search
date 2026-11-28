@@ -10,6 +10,10 @@
     java.lang.String rateLogBlocking();
 }
 
+-keepclassmembers class app.onlysearch.search.SourcesKt {
+    java.lang.String homeQuery(java.lang.String, java.lang.String, java.lang.String, java.time.ZoneId);
+}
+
 # The androidTest APK reuses these classes from the app APK (it only ships what the app lacks).
 -keep class androidx.tracing.** { *; }
 -keep class kotlin.** { *; }
